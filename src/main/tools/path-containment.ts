@@ -49,6 +49,12 @@ function canonicalizePath(pathValue: string, caseInsensitive: boolean): Canonica
     return null;
   }
 
+  // Defense in depth: reject paths containing null bytes which can be used to
+  // truncate strings in downstream OS APIs.
+  if (pathValue.includes('\x00')) {
+    return null;
+  }
+
   if (isWindowsDrivePath(pathValue)) {
     const drive = normalizeSegment(pathValue.slice(0, 2), caseInsensitive);
     return {
