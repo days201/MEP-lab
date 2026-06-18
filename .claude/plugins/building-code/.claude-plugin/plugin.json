@@ -1,0 +1,8 @@
+{
+  "name": "building-code",
+  "version": "0.1.0",
+  "description": "Citation-first building code lookup tools with section-centered semantic retrieval.",
+  "author": "Open Cowork Team",
+  "skills": "./skills",
+  "mcpServers": "./.mcp.json"
+}
