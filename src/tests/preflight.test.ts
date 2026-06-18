@@ -29,6 +29,10 @@ function makeSkillsDir(resourcesDir: string): void {
   fs.mkdirSync(path.join(resourcesDir, 'skills'), { recursive: true });
 }
 
+function makePluginsDir(resourcesDir: string): void {
+  fs.mkdirSync(path.join(resourcesDir, 'plugins'), { recursive: true });
+}
+
 // ── Test suite ───────────────────────────────────────────────
 
 describe('runPreflight', () => {
@@ -68,6 +72,7 @@ describe('runPreflight', () => {
     touch(path.join(tmpDir, 'node/bin/node'));
     touch(path.join(tmpDir, 'lima-agent/index.js'));
     makeSkillsDir(tmpDir);
+    makePluginsDir(tmpDir);
 
     const { runPreflight } = await import('../main/preflight');
     const issues = runPreflight();
@@ -90,6 +95,7 @@ describe('runPreflight', () => {
     touch(path.join(tmpDir, 'node/bin/node'));
     touch(path.join(tmpDir, 'lima-agent/index.js'));
     makeSkillsDir(tmpDir);
+    makePluginsDir(tmpDir);
 
     const { runPreflight } = await import('../main/preflight');
     const issues = runPreflight();
@@ -115,6 +121,7 @@ describe('runPreflight', () => {
     touch(path.join(tmpDir, 'mcp/gui-operate-server.js'));
     touch(path.join(tmpDir, 'lima-agent/index.js'));
     makeSkillsDir(tmpDir);
+    makePluginsDir(tmpDir);
 
     const { runPreflight } = await import('../main/preflight');
     const issues = runPreflight();
@@ -140,6 +147,7 @@ describe('runPreflight', () => {
     touch(path.join(tmpDir, 'mcp/gui-operate-server.js'));
     touch(path.join(tmpDir, 'wsl-agent/index.js'));
     makeSkillsDir(tmpDir);
+    makePluginsDir(tmpDir);
 
     const { runPreflight } = await import('../main/preflight');
     const issues = runPreflight();
@@ -165,6 +173,7 @@ describe('runPreflight', () => {
     touch(path.join(tmpDir, 'mcp/gui-operate-server.js'));
     touch(path.join(tmpDir, 'node/bin/node'));
     touch(path.join(tmpDir, 'lima-agent/index.js'));
+    makePluginsDir(tmpDir);
     // skills directory intentionally omitted
 
     const { runPreflight } = await import('../main/preflight');
@@ -173,6 +182,32 @@ describe('runPreflight', () => {
     expect(warnings.some((w) => w.resource === 'Built-in Skills')).toBe(true);
     const skillsWarning = warnings.find((w) => w.resource === 'Built-in Skills');
     expect(skillsWarning?.message).toContain('skills');
+
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform);
+    }
+  });
+
+  it('returns warning issue when plugins directory is missing', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      writable: true,
+      configurable: true,
+    });
+
+    touch(path.join(tmpDir, 'mcp/gui-operate-server.js'));
+    touch(path.join(tmpDir, 'node/bin/node'));
+    touch(path.join(tmpDir, 'lima-agent/index.js'));
+    makeSkillsDir(tmpDir);
+    // plugins directory intentionally omitted
+
+    const { runPreflight } = await import('../main/preflight');
+    const issues = runPreflight();
+    const warnings = issues.filter((i) => i.severity === 'warning');
+    expect(warnings.some((w) => w.resource === 'Built-in Plugins')).toBe(true);
+    const pluginsWarning = warnings.find((w) => w.resource === 'Built-in Plugins');
+    expect(pluginsWarning?.message).toContain('plugins');
 
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform);

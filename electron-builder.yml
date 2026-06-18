@@ -79,6 +79,8 @@ win:
       to: wsl-agent
     - from: .claude/skills
       to: skills
+    - from: .claude/plugins
+      to: plugins
 
 mac:
   icon: resources/icon.icns
@@ -113,6 +115,8 @@ mac:
       to: lima-agent
     - from: .claude/skills
       to: skills
+    - from: .claude/plugins
+      to: plugins
 
 linux:
   icon: resources/icon.png
@@ -132,6 +136,8 @@ linux:
       to: python
     - from: .claude/skills
       to: skills
+    - from: .claude/plugins
+      to: plugins
 
 nsis:
   oneClick: false

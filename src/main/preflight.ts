@@ -44,6 +44,7 @@ export function runPreflight(): PreflightIssue[] {
 
   // Non-critical checks
   check('skills', 'Built-in Skills', 'warning');
+  check('plugins', 'Built-in Plugins', 'warning');
 
   // Log results
   for (const issue of issues) {

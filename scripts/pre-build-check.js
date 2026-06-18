@@ -65,6 +65,12 @@ function buildCheckList(platform, arch) {
       type: 'dir',
       severity: 'fatal',
     },
+    {
+      label: 'Built-in plugins directory (.claude/plugins/)',
+      relPath: '.claude/plugins',
+      type: 'dir',
+      severity: 'fatal',
+    },
   ];
 
   if (platform === 'darwin') {

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "Building_Code": {
+      "command": "node",
+      "args": ["{BUILDING_CODE_SERVER_PATH}"],
+      "env": {
+        "BUILDING_CODE_INDEX_DIR": "",
+        "BUILDING_CODE_EMBEDDING_MODEL": "text-embedding-3-small",
+        "BUILDING_CODE_EMBEDDING_BASE_URL": "",
+        "BUILDING_CODE_EMBEDDING_API_KEY": ""
+      }
+    }
+  }
+}
