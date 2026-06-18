@@ -70,10 +70,56 @@ describe('building-code citation contract', () => {
     expect(() => assertCitedEvidence(brokenEvidence)).toThrow('citation');
   });
 
+  it('rejects invalid citation and evidence enum values at runtime', () => {
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: { ...sectionEvidence.citation, status: 'draft' },
+      })
+    ).toThrow('citation.status');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: { ...sectionEvidence.citation, nodeType: 'paragraph' },
+      })
+    ).toThrow('citation.nodeType');
+    expect(() => assertCitedEvidence({ ...sectionEvidence, evidenceKind: 'figure' })).toThrow(
+      'evidenceKind'
+    );
+  });
+
+  it('rejects malformed citation and evidence array fields at runtime', () => {
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: { ...sectionEvidence.citation, headingPath: ['Chapter 7', 7] },
+      })
+    ).toThrow('citation.headingPath');
+    expect(() =>
+      assertCitedEvidence({ ...sectionEvidence, applicabilityNotes: ['Valid note', 15] })
+    ).toThrow('applicabilityNotes');
+  });
+
+  it('rejects stale display citations that do not match canonical citation fields', () => {
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          displayCitation: 'ASHRAE 15 2019, Section 7.2.1',
+        },
+      })
+    ).toThrow('citation.displayCitation');
+  });
+
   it('wraps cited evidence in a model-facing building-code evidence envelope', () => {
     expect(wrapBuildingCodeEvidenceForModel([sectionEvidence])).toContain(
       '<building_code_evidence>'
     );
+  });
+
+  it('does not produce a valid-looking evidence envelope for empty evidence arrays', () => {
+    expect(() => wrapBuildingCodeEvidenceForModel([])).toThrow('unusable');
   });
 
   it('can represent section, table row, table note, figure, appendix, definition, and partial page-level citation statuses', () => {

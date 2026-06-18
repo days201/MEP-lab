@@ -2,6 +2,19 @@ import type { BuildingCodeEvidence, CodeCitation } from './types';
 
 type DisplayCitationInput = Pick<CodeCitation, 'codeFamily' | 'edition' | 'logicalRef'>;
 
+const allowedCitationStatuses = ['complete', 'partial'] as const;
+const allowedCodeNodeTypes = [
+  'section',
+  'subsection',
+  'table',
+  'table-row',
+  'table-note',
+  'figure',
+  'definition',
+  'appendix',
+  'note',
+] as const;
+const allowedEvidenceKinds = ['section', 'table-row', 'table-note', 'cross-reference'] as const;
 const requiredEvidenceStringFields = ['evidenceId', 'nodeId', 'evidenceKind', 'excerpt'] as const;
 const requiredCitationStringFields = [
   'status',
@@ -36,9 +49,8 @@ export function assertCitedEvidence(evidence: unknown): asserts evidence is Buil
     assertNonEmptyString(evidence[field], field);
   }
 
-  if (!Array.isArray(evidence.applicabilityNotes)) {
-    throw new Error('Building code evidence is missing applicabilityNotes');
-  }
+  assertAllowedValue(evidence.evidenceKind, allowedEvidenceKinds, 'evidenceKind');
+  assertStringArray(evidence.applicabilityNotes, 'applicabilityNotes');
 
   if (!isRecord(evidence.citation)) {
     throw new Error('Building code evidence is missing citation');
@@ -48,14 +60,22 @@ export function assertCitedEvidence(evidence: unknown): asserts evidence is Buil
     assertNonEmptyString(evidence.citation[field], `citation.${field}`);
   }
 
-  if (!Array.isArray(evidence.citation.headingPath)) {
-    throw new Error('Building code evidence is missing citation.headingPath');
+  assertAllowedValue(evidence.citation.status, allowedCitationStatuses, 'citation.status');
+  assertAllowedValue(evidence.citation.nodeType, allowedCodeNodeTypes, 'citation.nodeType');
+  assertStringArray(evidence.citation.headingPath, 'citation.headingPath');
+
+  const expectedDisplayCitation = buildDisplayCitation(evidence.citation as DisplayCitationInput);
+  if (evidence.citation.displayCitation !== expectedDisplayCitation) {
+    throw new Error('Building code evidence has mismatched citation.displayCitation');
   }
 }
 
 export function wrapBuildingCodeEvidenceForModel(evidence: BuildingCodeEvidence[]): string {
   if (!Array.isArray(evidence)) {
     throw new Error('Building code evidence must be an array');
+  }
+  if (evidence.length === 0) {
+    throw new Error(buildUnusableBuildingCodeResultMessage('no cited evidence was provided'));
   }
 
   const entries = evidence.map((item) => {
@@ -100,6 +120,22 @@ function normalizeCitationPart(value: string): string {
 
 function assertNonEmptyString(value: unknown, field: string): void {
   if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`Building code evidence is missing ${field}`);
+  }
+}
+
+function assertAllowedValue<const T extends readonly string[]>(
+  value: unknown,
+  allowedValues: T,
+  field: string
+): asserts value is T[number] {
+  if (typeof value !== 'string' || !allowedValues.includes(value)) {
+    throw new Error(`Building code evidence has invalid ${field}`);
+  }
+}
+
+function assertStringArray(value: unknown, field: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     throw new Error(`Building code evidence is missing ${field}`);
   }
 }
