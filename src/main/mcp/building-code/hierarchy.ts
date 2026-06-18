@@ -98,6 +98,7 @@ export function buildHierarchyFromPageTexts(
       const currentNode = stack.at(-1)?.node;
       if (currentNode) {
         currentNode.text = appendNodeLine(currentNode.text, line);
+        expandPageRange(currentNode, page.pageNumber);
       }
     }
   }
@@ -185,6 +186,18 @@ function appendNodeLine(currentText: string, line: string): string {
   }
 
   return `${currentText}\n${line}`;
+}
+
+function expandPageRange(node: CodeNodeRecord, pageNumber: number): void {
+  const [startPageText, endPageText] = node.pageRange.split('-');
+  const startPage = Number(startPageText);
+  const endPage = Number(endPageText ?? startPageText);
+
+  if (!Number.isFinite(startPage) || !Number.isFinite(endPage) || pageNumber <= endPage) {
+    return;
+  }
+
+  node.pageRange = pageNumber === startPage ? String(startPage) : `${startPage}-${pageNumber}`;
 }
 
 function displayHeading(node: CodeNodeRecord): string {

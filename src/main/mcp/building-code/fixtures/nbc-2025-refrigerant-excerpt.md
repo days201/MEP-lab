@@ -10,6 +10,7 @@ Where a refrigerant listed in Table 7.3.1 is Class 2L, the design shall apply th
 
 #### Table 7.3.1 Refrigerant Data
 | Refrigerant | Class | RCL | EDVC |
+| --- | --- | --- | --- |
 | R-32 | 2L | 0.061 kg/m3 | 0.30 kg/m3 |
 
 Note 1: RCL values in this table shall be used with the flammability provisions in Section 7.2.

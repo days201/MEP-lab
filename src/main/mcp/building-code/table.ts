@@ -1,10 +1,5 @@
 import { buildCitation, stableRecordId } from './hierarchy';
-import type {
-  CodeCitation,
-  CodeNodeRecord,
-  CodeSourceRecord,
-  CodeTableRecord,
-} from './types';
+import type { CodeCitation, CodeNodeRecord, CodeSourceRecord, CodeTableRecord } from './types';
 
 export function extractMarkdownTables(
   nodes: CodeNodeRecord[],
@@ -32,7 +27,7 @@ export function extractMarkdownTables(
             cells.join('|'),
           ]),
           cells,
-          citation: citationForTablePart(citation, node.logicalRef),
+          citation: citationForTablePart(citation, 'table-row', String(index), cells.join('|')),
         })),
         notes: notes.map((text, index) => ({
           noteId: stableRecordId('table-note', [
@@ -42,7 +37,7 @@ export function extractMarkdownTables(
             text,
           ]),
           text,
-          citation: citationForTablePart(citation, node.logicalRef),
+          citation: citationForTablePart(citation, 'table-note', String(index), text),
         })),
       };
     });
@@ -56,6 +51,8 @@ function parseTableText(text: string): {
   const columns: string[] = [];
   const rows: string[][] = [];
   const notes: string[] = [];
+  let pendingHeader: string[] | null = null;
+  let hasSeparator = false;
 
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -65,19 +62,22 @@ function parseTableText(text: string): {
         .split('|')
         .map((cell) => cell.trim());
 
-      if (cells.every((cell) => /^:?-{3,}:?$/.test(cell))) {
+      if (pendingHeader && isSeparatorRow(cells) && cells.length === pendingHeader.length) {
+        columns.push(...pendingHeader);
+        pendingHeader = null;
+        hasSeparator = true;
         continue;
       }
 
-      if (columns.length === 0) {
-        columns.push(...cells);
-      } else {
+      if (hasSeparator) {
         rows.push(cells);
+      } else {
+        pendingHeader = cells;
       }
       continue;
     }
 
-    if (/^Note\s+\d+:/i.test(trimmed)) {
+    if (hasSeparator && /^Note\s+\d+:/i.test(trimmed)) {
       notes.push(trimmed);
     }
   }
@@ -85,10 +85,25 @@ function parseTableText(text: string): {
   return { columns, rows, notes };
 }
 
-function citationForTablePart(citation: CodeCitation, logicalRef: string): CodeCitation {
+function citationForTablePart(
+  citation: CodeCitation,
+  nodeType: 'table-row' | 'table-note',
+  partIdentity: string,
+  partText: string
+): CodeCitation {
   return {
     ...citation,
-    logicalRef,
-    nodeType: 'table',
+    citationId: stableRecordId('citation', [
+      citation.sourceChecksum,
+      citation.logicalRef,
+      nodeType,
+      partIdentity,
+      partText,
+    ]),
+    nodeType,
   };
+}
+
+function isSeparatorRow(cells: string[]): boolean {
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
 }
