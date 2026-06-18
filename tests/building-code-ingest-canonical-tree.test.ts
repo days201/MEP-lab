@@ -126,4 +126,25 @@ describe('building-code fixture ingestion into canonical nodes', () => {
     expect(index.tables[0].columns).toEqual([]);
     expect(index.tables[0].rows).toEqual([]);
   });
+
+  it('bounds chunks for a single long paragraph and maps them to the source node', () => {
+    const longParagraph = Array.from({ length: 140 }, (_, index) => `requirement-${index}`)
+      .join(' ');
+    const markdown = [
+      '# ASHRAE 15 2022 Synthetic Excerpt',
+      '',
+      '## Section 7 Refrigerant Safety',
+      '',
+      longParagraph,
+    ].join('\n');
+    const index = ingest(markdown);
+    const section7 = index.nodes.find((node) => node.logicalRef === 'Section 7');
+    const sectionChunks = index.chunks.filter((chunk) => chunk.nodeId === section7?.nodeId);
+
+    expect(section7).toBeDefined();
+    expect(longParagraph.length).toBeGreaterThan(800);
+    expect(sectionChunks.length).toBeGreaterThan(1);
+    expect(sectionChunks.every((chunk) => chunk.text.length <= 800)).toBe(true);
+    expect(sectionChunks.every((chunk) => chunk.nodeId === section7?.nodeId)).toBe(true);
+  });
 });

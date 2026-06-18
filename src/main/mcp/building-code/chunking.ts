@@ -49,16 +49,20 @@ function splitNodeText(text: string): string[] {
   let current = '';
 
   for (const paragraph of paragraphs) {
-    const candidate = current ? `${current}\n\n${paragraph}` : paragraph;
-    if (candidate.length <= maxChunkLength) {
-      current = candidate;
-      continue;
-    }
+    const paragraphChunks = splitLongParagraph(paragraph);
 
-    if (current) {
-      chunks.push(current);
+    for (const paragraphChunk of paragraphChunks) {
+      const candidate = current ? `${current}\n\n${paragraphChunk}` : paragraphChunk;
+      if (candidate.length <= maxChunkLength) {
+        current = candidate;
+        continue;
+      }
+
+      if (current) {
+        chunks.push(current);
+      }
+      current = paragraphChunk;
     }
-    current = paragraph;
   }
 
   if (current) {
@@ -66,4 +70,36 @@ function splitNodeText(text: string): string[] {
   }
 
   return chunks;
+}
+
+function splitLongParagraph(paragraph: string): string[] {
+  const chunks: string[] = [];
+  let remaining = paragraph;
+
+  while (remaining.length > maxChunkLength) {
+    const splitAt = findWhitespaceSplit(remaining) ?? maxChunkLength;
+    const chunk = remaining.slice(0, splitAt).trimEnd();
+    if (chunk) {
+      chunks.push(chunk);
+    }
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
+function findWhitespaceSplit(text: string): number | undefined {
+  const earliestSplit = Math.floor(maxChunkLength * 0.75);
+
+  for (let index = maxChunkLength; index >= earliestSplit; index -= 1) {
+    if (/\s/.test(text[index])) {
+      return index;
+    }
+  }
+
+  return undefined;
 }
