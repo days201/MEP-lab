@@ -82,6 +82,7 @@ describe('building-code document registry', () => {
 
     expect(await registry.get('doc-1')).toMatchObject({
       status: 'removed',
+      lastIndexRebuildAt: '2026-06-19T12:02:00.000Z',
       failureMessage: null,
     });
   });

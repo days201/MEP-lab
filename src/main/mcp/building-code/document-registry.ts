@@ -36,8 +36,6 @@ export class DocumentRegistry {
   }
 
   async markRemoved(documentId: string, removedAt: string): Promise<void> {
-    void removedAt;
-
     const registry = await this.read();
     const existingIndex = registry.documents.findIndex((document) => document.documentId === documentId);
 
@@ -48,6 +46,7 @@ export class DocumentRegistry {
     registry.documents[existingIndex] = {
       ...registry.documents[existingIndex],
       status: 'removed',
+      lastIndexRebuildAt: removedAt,
       failureMessage: null,
     };
 
