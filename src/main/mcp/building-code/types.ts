@@ -43,16 +43,20 @@ export interface CodeCitation {
   status: CitationStatus;
   citationId: string;
   sourceId: string;
+  documentId: string;
   codeFamily: string;
   edition: string;
   jurisdictionScope: string;
   sourceTitle: string;
   sourceUrl: string;
+  localSourcePath: string;
   sourceChecksum: string;
   logicalRef: string;
   nodeType: CodeNodeType;
   pageRange: string;
   headingPath: string[];
+  extractionConfidence: number;
+  parser: CodeParserProvenance;
   displayCitation: string;
 }
 

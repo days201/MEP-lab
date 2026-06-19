@@ -30,16 +30,26 @@ function citationFor(
     status,
     citationId: `ashrae-15-2022-${logicalRef.toLowerCase().replace(/\W+/g, '-')}`,
     sourceId: 'ashrae-15-2022',
+    documentId: 'doc-ashrae-15-2022',
     codeFamily: base.codeFamily,
     edition: base.edition,
     jurisdictionScope: 'model-code',
     sourceTitle: 'ASHRAE Standard 15-2022',
     sourceUrl: 'https://example.test/ashrae-15-2022',
+    localSourcePath: 'C:/fixtures/ashrae-15-2022.pdf',
     sourceChecksum: 'sha256:example',
     logicalRef: base.logicalRef,
     nodeType,
     pageRange: '12',
     headingPath: ['Safety Standard for Refrigeration Systems', logicalRef],
+    extractionConfidence: 1,
+    parser: {
+      name: 'fixture',
+      version: 'test-fixture',
+      sourceElementIds: ['section-7-2-1'],
+      pageRange: '12',
+      boundingBoxes: [],
+    },
     displayCitation: buildDisplayCitation(base),
   };
 }
@@ -115,10 +125,86 @@ describe('building-code citation contract', () => {
     ).toThrow('citation.displayCitation');
   });
 
+  it('requires uploaded document provenance on citations at runtime', () => {
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: { ...sectionEvidence.citation, documentId: undefined },
+      })
+    ).toThrow('citation.documentId');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: { ...sectionEvidence.citation, localSourcePath: undefined },
+      })
+    ).toThrow('citation.localSourcePath');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: { ...sectionEvidence.citation, extractionConfidence: undefined },
+      })
+    ).toThrow('citation.extractionConfidence');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: { ...sectionEvidence.citation, parser: undefined },
+      })
+    ).toThrow('citation.parser');
+  });
+
+  it('rejects malformed parser provenance on citations at runtime', () => {
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          parser: { ...sectionEvidence.citation.parser, name: undefined },
+        },
+      })
+    ).toThrow('citation.parser.name');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          parser: { ...sectionEvidence.citation.parser, version: undefined },
+        },
+      })
+    ).toThrow('citation.parser.version');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          parser: { ...sectionEvidence.citation.parser, sourceElementIds: undefined },
+        },
+      })
+    ).toThrow('citation.parser.sourceElementIds');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          parser: { ...sectionEvidence.citation.parser, pageRange: undefined },
+        },
+      })
+    ).toThrow('citation.parser.pageRange');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          parser: { ...sectionEvidence.citation.parser, boundingBoxes: undefined },
+        },
+      })
+    ).toThrow('citation.parser.boundingBoxes');
+  });
+
   it('wraps cited evidence in a model-facing building-code evidence envelope', () => {
-    expect(wrapBuildingCodeEvidenceForModel([sectionEvidence])).toContain(
-      '<building_code_evidence>'
-    );
+    const wrappedEvidence = wrapBuildingCodeEvidenceForModel([sectionEvidence]);
+
+    expect(wrappedEvidence).toContain('<building_code_evidence>');
+    expect(wrappedEvidence).not.toContain(sectionEvidence.citation.localSourcePath);
   });
 
   it('does not produce a valid-looking evidence envelope for empty evidence arrays', () => {
@@ -240,7 +326,19 @@ describe('building-code citation contract', () => {
 
     const citation = buildCitation(source, node);
 
+    expect(citation.documentId).toBe('doc-1');
+    expect(citation.localSourcePath).toBe(
+      'C:/Users/example/AppData/Roaming/MEP Lab/knowledge-base/building-code/sources/doc-1.pdf'
+    );
     expect(citation.sourceUrl).toBe('kb://building-code/doc-1/source.pdf');
     expect(citation.pageRange).toBe('12-13');
+    expect(citation.extractionConfidence).toBe(0.97);
+    expect(citation.parser).toEqual({
+      name: 'docling',
+      version: '2.0.0',
+      sourceElementIds: ['page-12-block-3'],
+      pageRange: '12-13',
+      boundingBoxes: [{ pageNumber: 12, x: 10, y: 20, width: 300, height: 24 }],
+    });
   });
 });
