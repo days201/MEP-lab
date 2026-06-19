@@ -26,6 +26,7 @@ function minimalIndex(): BuildingCodeIndex {
     tables: [],
     crossReferences: [],
     diagnostics: ['fixture diagnostic'],
+    semanticSearchAvailable: true,
   };
 }
 
@@ -276,5 +277,36 @@ describe('building-code index store', () => {
         citation: noteCitation,
       })
     ).not.toThrow();
+  });
+
+  it('creates an empty active index with semantic search unavailable', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+
+    const { createEmptyBuildingCodeIndex, isBuildingCodeIndexEmpty } = await import(
+      '../src/main/mcp/building-code/index-store'
+    );
+    const index = createEmptyBuildingCodeIndex(['empty knowledge base']);
+
+    expect(isBuildingCodeIndexEmpty(index)).toBe(true);
+    expect(index.semanticSearchAvailable).toBe(false);
+    await saveBuildingCodeIndex(tempRoot, index);
+    await expect(loadBuildingCodeIndex(tempRoot)).resolves.toMatchObject({
+      version: 1,
+      semanticSearchAvailable: false,
+      diagnostics: ['empty knowledge base'],
+    });
+  });
+
+  it('does not replace the last good index when an atomic write fails before rename', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+    await saveBuildingCodeIndex(tempRoot, minimalIndex());
+
+    const badIndex = { ...minimalIndex(), version: 999 as 1 };
+    await expect(saveBuildingCodeIndex(tempRoot, badIndex)).rejects.toThrow(
+      'Unsupported building-code index version'
+    );
+    await expect(loadBuildingCodeIndex(tempRoot)).resolves.toEqual(minimalIndex());
   });
 });

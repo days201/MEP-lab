@@ -23,11 +23,31 @@ export interface BuildingCodeIndex {
   tables: CodeTableRecord[];
   crossReferences: CodeCrossReferenceRecord[];
   diagnostics: string[];
+  semanticSearchAvailable?: boolean;
 }
 
 type BuildingCodeIndexFile = Omit<BuildingCodeIndex, 'vectors'>;
 
 const supportedVersion = 1;
+
+export function createEmptyBuildingCodeIndex(diagnostics: string[] = []): BuildingCodeIndex {
+  return {
+    version: supportedVersion,
+    sources: [],
+    pages: [],
+    nodes: [],
+    chunks: [],
+    vectors: [],
+    tables: [],
+    crossReferences: [],
+    diagnostics,
+    semanticSearchAvailable: false,
+  };
+}
+
+export function isBuildingCodeIndexEmpty(index: Pick<BuildingCodeIndex, 'sources' | 'nodes'>): boolean {
+  return index.sources.length === 0 || index.nodes.length === 0;
+}
 
 export async function loadBuildingCodeIndex(indexDir: string): Promise<BuildingCodeIndex> {
   const indexPath = path.join(indexDir, 'index.json');
@@ -60,6 +80,7 @@ export async function loadBuildingCodeIndex(indexDir: string): Promise<BuildingC
     ),
     crossReferences: arrayOrEmpty(indexFile.crossReferences),
     diagnostics: arrayOrEmpty(indexFile.diagnostics),
+    semanticSearchAvailable: indexFile.semanticSearchAvailable === true,
   };
 }
 
