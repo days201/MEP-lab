@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 export interface NormalizedDoclingPage {
   pageNumber: number;
@@ -35,20 +35,22 @@ export interface NormalizedDoclingResult {
   diagnostics: string[];
 }
 
-export interface DoclingProcessResult {
+export interface ProcessResult {
   exitCode: number | null;
   stdout: string;
   stderr: string;
 }
 
+export type DoclingProcessResult = ProcessResult;
+
 export type DoclingProcessRunner = (
   command: string,
   args: string[]
-) => Promise<DoclingProcessResult>;
+) => Promise<ProcessResult>;
 
 export interface ParseDocumentWithDoclingInput {
-  documentPath: string;
-  pythonExecutable?: string;
+  filePath: string;
+  pythonPath: string;
   bridgePath?: string;
   runProcess?: DoclingProcessRunner;
 }
@@ -63,7 +65,7 @@ export class DoclingParserUnavailableError extends Error {
   }
 }
 
-const bridgePath = fileURLToPath(new URL('./docling_bridge.py', import.meta.url));
+const bridgePath = path.join(__dirname, 'building-code', 'docling_bridge.py');
 const supportedKinds = new Set<NormalizedDoclingElement['kind']>([
   'heading',
   'text',
@@ -76,8 +78,8 @@ const supportedKinds = new Set<NormalizedDoclingElement['kind']>([
 export async function parseDocumentWithDocling(
   input: ParseDocumentWithDoclingInput
 ): Promise<NormalizedDoclingResult> {
-  const command = input.pythonExecutable ?? 'python';
-  const args = [input.bridgePath ?? bridgePath, input.documentPath];
+  const command = input.pythonPath;
+  const args = [input.bridgePath ?? bridgePath, input.filePath];
   const result = await (input.runProcess ?? runProcess)(command, args);
 
   if (result.exitCode !== 0) {
@@ -95,7 +97,7 @@ export async function parseDocumentWithDocling(
   return normalizeDoclingResult(parsed);
 }
 
-function runProcess(command: string, args: string[]): Promise<DoclingProcessResult> {
+function runProcess(command: string, args: string[]): Promise<ProcessResult> {
   return new Promise((resolve) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
@@ -118,7 +120,7 @@ function runProcess(command: string, args: string[]): Promise<DoclingProcessResu
   });
 }
 
-function throwParserProcessError(result: DoclingProcessResult): never {
+function throwParserProcessError(result: ProcessResult): never {
   const output = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
 
   if (isMissingDoclingImport(output)) {
@@ -133,8 +135,9 @@ function throwParserProcessError(result: DoclingProcessResult): never {
 
 function isMissingDoclingImport(output: string): boolean {
   return (
-    /ModuleNotFoundError:\s+No module named ['"]?docling['"]?/i.test(output) ||
-    /ImportError:.*docling/i.test(output)
+    /No module named\s+['"]?docling['"]?/i.test(output) ||
+    /\bModuleNotFoundError\b/i.test(output) ||
+    /\bImportError\b/i.test(output)
   );
 }
 

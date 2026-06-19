@@ -47,8 +47,8 @@ describe('building-code Docling parser bridge', () => {
 
     await expect(
       parseDocumentWithDocling({
-        documentPath: 'C:\\codes\\ashrae-15.pdf',
-        pythonExecutable: 'python',
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
         runProcess,
       })
     ).resolves.toEqual({
@@ -94,7 +94,67 @@ describe('building-code Docling parser bridge', () => {
 
     await expect(
       parseDocumentWithDocling({
-        documentPath: 'C:\\codes\\ashrae-15.pdf',
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
+        runProcess,
+      })
+    ).rejects.toThrow(DoclingParserUnavailableError);
+  });
+
+  it('uses the bundled bridge path shape when bridgePath is omitted', async () => {
+    const runProcess: DoclingProcessRunner = async (command, args) => {
+      expect(command).toBe('py');
+      expect(args[0].replace(/\\/g, '/')).toMatch(/building-code\/docling_bridge\.py$/);
+      expect(args[1]).toBe('C:\\codes\\ashrae-34.pdf');
+
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({
+          parserName: 'docling',
+          parserVersion: '2.0.0',
+          pages: [],
+          elements: [],
+          tables: [],
+          diagnostics: [],
+        }),
+        stderr: '',
+      };
+    };
+
+    await parseDocumentWithDocling({
+      filePath: 'C:\\codes\\ashrae-34.pdf',
+      pythonPath: 'py',
+      runProcess,
+    });
+  });
+
+  it('rejects raw missing module output with an actionable error', async () => {
+    const runProcess: DoclingProcessRunner = async () => ({
+      exitCode: 2,
+      stdout: '',
+      stderr: 'No module named docling',
+    });
+
+    await expect(
+      parseDocumentWithDocling({
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
+        runProcess,
+      })
+    ).rejects.toThrow(DoclingParserUnavailableError);
+  });
+
+  it('rejects generic import failures with an actionable error', async () => {
+    const runProcess: DoclingProcessRunner = async () => ({
+      exitCode: 2,
+      stdout: '',
+      stderr: 'ImportError: cannot import name DocumentConverter',
+    });
+
+    await expect(
+      parseDocumentWithDocling({
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
         runProcess,
       })
     ).rejects.toThrow(DoclingParserUnavailableError);
