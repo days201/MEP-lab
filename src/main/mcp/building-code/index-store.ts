@@ -23,7 +23,7 @@ export interface BuildingCodeIndex {
   tables: CodeTableRecord[];
   crossReferences: CodeCrossReferenceRecord[];
   diagnostics: string[];
-  semanticSearchAvailable?: boolean;
+  semanticSearchAvailable: boolean;
 }
 
 type BuildingCodeIndexFile = Omit<BuildingCodeIndex, 'vectors'>;
