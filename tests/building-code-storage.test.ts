@@ -29,10 +29,14 @@ describe('building-code knowledge-base storage', () => {
   });
 
   it('accepts the first-slice file extensions and rejects unsupported files', () => {
+    const supportedExtensions = ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'txt', 'md', 'csv'];
+    for (const extension of supportedExtensions) {
+      const filePath = `code.${extension}`;
+      expect(detectKnowledgeBaseFileType(filePath)).toBe(extension);
+      expect(assertSupportedKnowledgeBaseFile(filePath)).toBe(extension);
+    }
     expect(detectKnowledgeBaseFileType('code.PDF')).toBe('pdf');
-    expect(detectKnowledgeBaseFileType('code.docx')).toBe('docx');
-    expect(detectKnowledgeBaseFileType('code.xlsx')).toBe('xlsx');
-    expect(detectKnowledgeBaseFileType('code.md')).toBe('md');
+    expect(assertSupportedKnowledgeBaseFile('code.PDF')).toBe('pdf');
     expect(() => assertSupportedKnowledgeBaseFile('malware.exe')).toThrow(
       'Unsupported building-code document type: .exe'
     );
