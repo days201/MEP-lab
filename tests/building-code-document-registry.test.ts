@@ -68,8 +68,33 @@ describe('building-code document registry', () => {
     await registry.upsert(record());
     await registry.upsert(record({ status: 'ready', parseCompletedAt: '2026-06-19T12:01:00.000Z' }));
 
+    expect(JSON.parse(fs.readFileSync(registryPath, 'utf8'))).toMatchObject({
+      version: 1,
+      documents: [expect.objectContaining({ documentId: 'doc-1', status: 'ready' })],
+    });
+
     const reloaded = new DocumentRegistry(registryPath);
     expect(await reloaded.get('doc-1')).toMatchObject({ status: 'ready' });
+  });
+
+  it('rejects unsupported registry versions', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registryPath = path.join(root, 'documents.json');
+    fs.writeFileSync(registryPath, JSON.stringify({ version: 2, documents: [] }), 'utf8');
+    const registry = new DocumentRegistry(registryPath);
+
+    await expect(registry.list()).rejects.toThrow('Unsupported knowledge-base document registry version');
+  });
+
+  it('rejects malformed v1 document arrays', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registryPath = path.join(root, 'documents.json');
+    fs.writeFileSync(registryPath, JSON.stringify({ version: 1, documents: {} }), 'utf8');
+    const registry = new DocumentRegistry(registryPath);
+
+    await expect(registry.list()).rejects.toThrow('Malformed knowledge-base document registry documents');
   });
 
   it('marks removed documents without deleting their audit record', async () => {

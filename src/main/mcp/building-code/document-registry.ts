@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { KnowledgeBaseDocumentRecord } from '../../../shared/ipc-types';
@@ -8,6 +9,7 @@ interface DocumentRegistryFile {
 }
 
 const supportedVersion = 1;
+const malformedDocumentsMessage = 'Malformed knowledge-base document registry documents';
 
 export class DocumentRegistry {
   constructor(private readonly registryPath: string) {}
@@ -61,9 +63,13 @@ export class DocumentRegistry {
         throw new Error('Unsupported knowledge-base document registry version');
       }
 
+      if (!Array.isArray(registry.documents)) {
+        throw new Error(malformedDocumentsMessage);
+      }
+
       return {
         version: supportedVersion,
-        documents: Array.isArray(registry.documents) ? registry.documents : [],
+        documents: registry.documents,
       };
     } catch (error) {
       if (isNodeError(error) && error.code === 'ENOENT') {
@@ -76,11 +82,20 @@ export class DocumentRegistry {
 
   private async write(documents: KnowledgeBaseDocumentRecord[]): Promise<void> {
     const directory = path.dirname(this.registryPath);
-    const tempPath = path.join(directory, `.${path.basename(this.registryPath)}.${process.pid}.${Date.now()}.tmp`);
+    const tempPath = path.join(directory, `.${path.basename(this.registryPath)}.${randomUUID()}.tmp`);
+    let renamed = false;
 
     await fs.mkdir(directory, { recursive: true });
-    await fs.writeFile(tempPath, `${JSON.stringify({ version: supportedVersion, documents }, null, 2)}\n`, 'utf8');
-    await fs.rename(tempPath, this.registryPath);
+
+    try {
+      await fs.writeFile(tempPath, `${JSON.stringify({ version: supportedVersion, documents }, null, 2)}\n`, 'utf8');
+      await fs.rename(tempPath, this.registryPath);
+      renamed = true;
+    } finally {
+      if (!renamed) {
+        await fs.rm(tempPath, { force: true }).catch(() => undefined);
+      }
+    }
   }
 }
 
