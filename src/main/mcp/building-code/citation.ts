@@ -175,15 +175,19 @@ function assertLayoutBoxes(value: unknown, field: string): asserts value is Code
     value.some(
       (item) =>
         !isRecord(item) ||
-        typeof item.pageNumber !== 'number' ||
-        typeof item.x !== 'number' ||
-        typeof item.y !== 'number' ||
-        typeof item.width !== 'number' ||
-        typeof item.height !== 'number'
+        !isFiniteNumber(item.pageNumber) ||
+        !isFiniteNumber(item.x) ||
+        !isFiniteNumber(item.y) ||
+        !isFiniteNumber(item.width) ||
+        !isFiniteNumber(item.height)
     )
   ) {
     throw new Error(`Building code evidence is missing ${field}`);
   }
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

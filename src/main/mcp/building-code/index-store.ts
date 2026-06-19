@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { PageText } from './pdf-extract';
 import type {
   CodeChunkRecord,
+  CodeCitation,
   CodeCrossReferenceRecord,
   CodeLayoutBox,
   CodeParserProvenance,
@@ -42,17 +43,21 @@ export async function loadBuildingCodeIndex(indexDir: string): Promise<BuildingC
 
   const sources = arrayOrEmpty(indexFile.sources).map(normalizeCodeSourceRecord);
   const sourceById = new Map(sources.map((source) => [source.sourceId, source]));
+  const nodes = arrayOrEmpty(indexFile.nodes).map((node) =>
+    normalizeCodeNodeRecord(node, sourceById.get(node.sourceId))
+  );
+  const nodeById = new Map(nodes.map((node) => [node.nodeId, node]));
 
   return {
     version: supportedVersion,
     sources,
     pages: arrayOrEmpty(indexFile.pages),
-    nodes: arrayOrEmpty(indexFile.nodes).map((node) =>
-      normalizeCodeNodeRecord(node, sourceById.get(node.sourceId))
-    ),
+    nodes,
     chunks: arrayOrEmpty(indexFile.chunks),
     vectors: arrayOrEmpty(vectorFile.vectors),
-    tables: arrayOrEmpty(indexFile.tables),
+    tables: arrayOrEmpty(indexFile.tables).map((table) =>
+      normalizeCodeTableRecord(table, nodeById.get(table.nodeId), sourceById)
+    ),
     crossReferences: arrayOrEmpty(indexFile.crossReferences),
     diagnostics: arrayOrEmpty(indexFile.diagnostics),
   };
@@ -109,9 +114,70 @@ function normalizeCodeNodeRecord(
   };
 }
 
+function normalizeCodeTableRecord(
+  table: CodeTableRecord,
+  node: CodeNodeRecord | undefined,
+  sourceById: Map<string, CodeSourceRecord>
+): CodeTableRecord {
+  return {
+    ...table,
+    rows: table.rows.map((row) => ({
+      ...row,
+      citation: normalizeCodeTableCitation(row.citation, 'table-row', node, sourceById),
+    })),
+    notes: table.notes.map((note) => ({
+      ...note,
+      citation: normalizeCodeTableCitation(note.citation, 'table-note', node, sourceById),
+    })),
+  };
+}
+
+function normalizeCodeTableCitation(
+  citation: CodeCitation,
+  fallbackNodeType: 'table-row' | 'table-note',
+  node: CodeNodeRecord | undefined,
+  sourceById: Map<string, CodeSourceRecord>
+): CodeCitation {
+  const sourceId = stringOrDefault(citation.sourceId, node?.sourceId ?? '');
+  const source = sourceById.get(sourceId) ?? (node ? sourceById.get(node.sourceId) : undefined);
+  const pageRange = stringOrDefault(citation.pageRange, node?.pageRange ?? '');
+  const parserFallbackNode: CodeNodeRecord = {
+    nodeId: node?.nodeId ?? '',
+    sourceId,
+    documentId: node?.documentId ?? source?.documentId ?? sourceId,
+    nodeType: citation.nodeType ?? fallbackNodeType,
+    logicalRef: citation.logicalRef,
+    title: node?.title ?? '',
+    text: node?.text ?? '',
+    pageRange,
+    headingPath: node?.headingPath ?? citation.headingPath ?? [],
+    parentNodeId: node?.parentNodeId ?? null,
+    childNodeIds: node?.childNodeIds ?? [],
+    extractionConfidence: isFiniteNumber(node?.extractionConfidence) ? node.extractionConfidence : 1,
+    parser: node?.parser ?? fallbackParserProvenance(source, { pageRange }),
+  };
+
+  return {
+    ...citation,
+    sourceId,
+    documentId: stringOrDefault(citation.documentId, source?.documentId ?? node?.documentId ?? sourceId),
+    localSourcePath:
+      typeof citation.localSourcePath === 'string' ? citation.localSourcePath : source?.localSourcePath ?? '',
+    nodeType: citation.nodeType ?? fallbackNodeType,
+    pageRange,
+    headingPath: Array.isArray(citation.headingPath) ? citation.headingPath : node?.headingPath ?? [],
+    extractionConfidence: isFiniteNumber(citation.extractionConfidence)
+      ? citation.extractionConfidence
+      : parserFallbackNode.extractionConfidence,
+    parser: isStructurallyValidParserProvenance(citation.parser)
+      ? citation.parser
+      : fallbackParserProvenance(source, parserFallbackNode),
+  };
+}
+
 function fallbackParserProvenance(
   source: CodeSourceRecord | undefined,
-  node: CodeNodeRecord
+  node: Pick<CodeNodeRecord, 'pageRange'>
 ): CodeParserProvenance {
   const isFixture = source?.sourceUrl.startsWith('fixture://') ?? false;
 
@@ -145,13 +211,17 @@ function isLayoutBoxArray(value: unknown): value is CodeLayoutBox[] {
     value.every(
       (item) =>
         isRecord(item) &&
-        typeof item.pageNumber === 'number' &&
-        typeof item.x === 'number' &&
-        typeof item.y === 'number' &&
-        typeof item.width === 'number' &&
-        typeof item.height === 'number'
+        isFiniteNumber(item.pageNumber) &&
+        isFiniteNumber(item.x) &&
+        isFiniteNumber(item.y) &&
+        isFiniteNumber(item.width) &&
+        isFiniteNumber(item.height)
     )
   );
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function stringOrDefault(value: unknown, fallback: string): string {
