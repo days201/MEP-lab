@@ -5,11 +5,14 @@ import {
   buildUnusableBuildingCodeResultMessage,
   wrapBuildingCodeEvidenceForModel,
 } from '../src/main/mcp/building-code/citation';
+import { buildCitation } from '../src/main/mcp/building-code/hierarchy';
 import type {
   BuildingCodeEvidence,
   CitationStatus,
   CodeCitation,
+  CodeNodeRecord,
   CodeNodeType,
+  CodeSourceRecord,
 } from '../src/main/mcp/building-code/types';
 
 function citationFor(
@@ -198,5 +201,46 @@ describe('building-code citation contract', () => {
     expect(buildUnusableBuildingCodeResultMessage('missing canonical citation')).toContain(
       'missing canonical citation'
     );
+  });
+
+  it('preserves uploaded document provenance on canonical evidence', () => {
+    const source: CodeSourceRecord = {
+      sourceId: 'source-doc-1',
+      documentId: 'doc-1',
+      codeFamily: 'NBC',
+      edition: '2025',
+      jurisdictionScope: 'Canada',
+      sourceTitle: 'NBC 2025',
+      sourceUrl: 'kb://building-code/doc-1/source.pdf',
+      localSourcePath:
+        'C:/Users/example/AppData/Roaming/MEP Lab/knowledge-base/building-code/sources/doc-1.pdf',
+      sourceChecksum: 'sha256:abc',
+    };
+    const node: CodeNodeRecord = {
+      nodeId: 'node-1',
+      sourceId: source.sourceId,
+      documentId: 'doc-1',
+      nodeType: 'section',
+      logicalRef: 'Section 9.10.3.1',
+      title: 'Fire separations',
+      text: 'See Table 9.10.3.1.',
+      pageRange: '12-13',
+      headingPath: ['NBC 2025', 'Section 9.10.3.1 Fire separations'],
+      parentNodeId: null,
+      childNodeIds: [],
+      extractionConfidence: 0.97,
+      parser: {
+        name: 'docling',
+        version: '2.0.0',
+        sourceElementIds: ['page-12-block-3'],
+        pageRange: '12-13',
+        boundingBoxes: [{ pageNumber: 12, x: 10, y: 20, width: 300, height: 24 }],
+      },
+    };
+
+    const citation = buildCitation(source, node);
+
+    expect(citation.sourceUrl).toBe('kb://building-code/doc-1/source.pdf');
+    expect(citation.pageRange).toBe('12-13');
   });
 });

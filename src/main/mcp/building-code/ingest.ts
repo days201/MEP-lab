@@ -21,7 +21,11 @@ export interface BuildingCodeIngestionIndex {
   diagnostics: string[];
 }
 
-export type MarkdownFixtureSourceInput = Omit<CodeSourceRecord, 'sourceChecksum'>;
+export type MarkdownFixtureSourceInput = Omit<
+  CodeSourceRecord,
+  'sourceChecksum' | 'documentId' | 'localSourcePath'
+> &
+  Partial<Pick<CodeSourceRecord, 'documentId' | 'localSourcePath'>>;
 
 export function ingestMarkdownFixture(
   markdown: string,
@@ -29,6 +33,8 @@ export function ingestMarkdownFixture(
 ): BuildingCodeIngestionIndex {
   const source: CodeSourceRecord = {
     ...sourceInput,
+    documentId: sourceInput.documentId ?? sourceInput.sourceId,
+    localSourcePath: sourceInput.localSourcePath ?? sourceInput.sourceUrl,
     sourceChecksum: checksumText(markdown),
   };
   const pages = pageTextsFromMarkdownFixture(markdown);

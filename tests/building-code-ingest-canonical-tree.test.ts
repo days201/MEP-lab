@@ -19,11 +19,13 @@ const fixturePath = path.join(
 function sourceFor(markdown: string): CodeSourceRecord {
   return {
     sourceId: 'ashrae-15-2022-synthetic',
+    documentId: 'ashrae-15-2022-synthetic',
     codeFamily: 'ASHRAE 15',
     edition: '2022',
     jurisdictionScope: 'synthetic-fixture',
     sourceTitle: 'ASHRAE 15 2022 Synthetic Excerpt',
     sourceUrl: 'fixture://nbc-2025-refrigerant-excerpt.md',
+    localSourcePath: 'fixture://nbc-2025-refrigerant-excerpt.md',
     sourceChecksum: checksumText(markdown),
   };
 }

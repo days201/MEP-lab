@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { buildDisplayCitation } from './citation';
-import type { CodeCitation, CodeNodeRecord, CodeNodeType, CodeSourceRecord } from './types';
+import type {
+  CodeCitation,
+  CodeNodeRecord,
+  CodeNodeType,
+  CodeParserProvenance,
+  CodeSourceRecord,
+} from './types';
 import type { PageText } from './pdf-extract';
 
 interface HeadingMatch {
@@ -75,6 +81,7 @@ export function buildHierarchyFromPageTexts(
             matchedHeading.nodeType
           ),
           sourceId: source.sourceId,
+          documentId: source.documentId,
           nodeType: matchedHeading.nodeType,
           logicalRef: matchedHeading.logicalRef,
           title: matchedHeading.title,
@@ -84,6 +91,7 @@ export function buildHierarchyFromPageTexts(
           parentNodeId: parent?.nodeId ?? null,
           childNodeIds: [],
           extractionConfidence: 1,
+          parser: parserProvenanceForPage(source, page),
         };
 
         if (parent) {
@@ -198,10 +206,26 @@ function expandPageRange(node: CodeNodeRecord, pageNumber: number): void {
   }
 
   node.pageRange = pageNumber === startPage ? String(startPage) : `${startPage}-${pageNumber}`;
+  node.parser.pageRange = node.pageRange;
 }
 
 function displayHeading(node: CodeNodeRecord): string {
   return node.title === node.logicalRef ? node.logicalRef : `${node.logicalRef} ${node.title}`;
+}
+
+function parserProvenanceForPage(
+  source: CodeSourceRecord,
+  page: PageText
+): CodeParserProvenance {
+  const isFixture = source.sourceUrl.startsWith('fixture://');
+
+  return {
+    name: isFixture ? 'fixture' : 'docling',
+    version: isFixture ? 'test-fixture' : 'unknown',
+    sourceElementIds: [],
+    pageRange: String(page.pageNumber),
+    boundingBoxes: [],
+  };
 }
 
 function hashText(text: string, length: number): string {
