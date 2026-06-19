@@ -211,15 +211,119 @@ function validateDoclingResult(value: unknown): asserts value is Record<string, 
     throwInvalidResult('parserVersion must be a string');
   }
 
-  for (const key of ['pages', 'elements', 'tables', 'diagnostics']) {
-    if (!Array.isArray(record[key])) {
-      throwInvalidResult(`${key} must be an array`);
-    }
-  }
+  const pages = requireArray(record.pages, 'pages');
+  const elements = requireArray(record.elements, 'elements');
+  const tables = requireArray(record.tables, 'tables');
+  const diagnostics = requireArray(record.diagnostics, 'diagnostics');
+
+  pages.forEach(validatePageResult);
+  elements.forEach(validateElementResult);
+  tables.forEach(validateTableResult);
+  validateStringArray(diagnostics, 'diagnostics');
 }
 
 function throwInvalidResult(message: string): never {
   throw new Error(`Docling parser returned invalid result: ${message}`);
+}
+
+function validatePageResult(value: unknown, index: number): void {
+  const prefix = `pages[${index}]`;
+  const record = requireRecord(value, prefix);
+  requireFiniteNumber(record.pageNumber, `${prefix}.pageNumber`);
+  requireString(record.text, `${prefix}.text`);
+}
+
+function validateElementResult(value: unknown, index: number): void {
+  const prefix = `elements[${index}]`;
+  const record = requireRecord(value, prefix);
+  requireString(record.elementId, `${prefix}.elementId`);
+  const kind = requireString(record.kind, `${prefix}.kind`);
+
+  if (!supportedKinds.has(kind as NormalizedDoclingElement['kind'])) {
+    throwInvalidResult(`${prefix}.kind must be a supported Docling element kind`);
+  }
+
+  requireString(record.text, `${prefix}.text`);
+  requireFiniteNumber(record.pageNumber, `${prefix}.pageNumber`);
+
+  if (record.level !== null && !isFiniteNumber(record.level)) {
+    throwInvalidResult(`${prefix}.level must be a finite number or null`);
+  }
+
+  requireFiniteNumber(record.confidence, `${prefix}.confidence`);
+  validateBboxResult(record.bbox, `${prefix}.bbox`);
+}
+
+function validateBboxResult(value: unknown, prefix: string): void {
+  if (value === null) {
+    return;
+  }
+
+  const record = requireRecord(value, prefix);
+  requireFiniteNumber(record.x, `${prefix}.x`);
+  requireFiniteNumber(record.y, `${prefix}.y`);
+  requireFiniteNumber(record.width, `${prefix}.width`);
+  requireFiniteNumber(record.height, `${prefix}.height`);
+}
+
+function validateTableResult(value: unknown, index: number): void {
+  const prefix = `tables[${index}]`;
+  const record = requireRecord(value, prefix);
+  requireString(record.elementId, `${prefix}.elementId`);
+  requireString(record.caption, `${prefix}.caption`);
+  requireFiniteNumber(record.pageNumber, `${prefix}.pageNumber`);
+  validateStringArray(record.columns, `${prefix}.columns`);
+  validateStringMatrix(record.rows, `${prefix}.rows`);
+  validateStringArray(record.notes, `${prefix}.notes`);
+  requireFiniteNumber(record.confidence, `${prefix}.confidence`);
+}
+
+function validateStringArray(value: unknown, prefix: string): void {
+  requireArray(value, prefix).forEach((item, index) => {
+    if (typeof item !== 'string') {
+      throwInvalidResult(`${prefix}[${index}] must be a string`);
+    }
+  });
+}
+
+function validateStringMatrix(value: unknown, prefix: string): void {
+  requireArray(value, prefix).forEach((row, rowIndex) => {
+    validateStringArray(row, `${prefix}[${rowIndex}]`);
+  });
+}
+
+function requireArray(value: unknown, prefix: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throwInvalidResult(`${prefix} must be an array`);
+  }
+
+  return value;
+}
+
+function requireRecord(value: unknown, prefix: string): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throwInvalidResult(`${prefix} must be an object`);
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function requireString(value: unknown, prefix: string): string {
+  if (typeof value !== 'string') {
+    throwInvalidResult(`${prefix} must be a string`);
+  }
+
+  return value;
+}
+
+function requireFiniteNumber(value: unknown, prefix: string): void {
+  if (!isFiniteNumber(value)) {
+    throwInvalidResult(`${prefix} must be finite`);
+  }
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function normalizePage(value: unknown, index: number): NormalizedDoclingPage {

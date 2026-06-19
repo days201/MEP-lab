@@ -211,6 +211,75 @@ describe('building-code Docling parser bridge', () => {
     ).rejects.toThrow('Docling parser returned invalid result: parserName must be docling');
   });
 
+  it('rejects malformed page items from successful bridge output', async () => {
+    const runProcess: DoclingProcessRunner = async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        parserName: 'docling',
+        parserVersion: '2.0.0',
+        pages: [{}],
+        elements: [],
+        tables: [],
+        diagnostics: [],
+      }),
+      stderr: '',
+    });
+
+    await expect(
+      parseDocumentWithDocling({
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
+        runProcess,
+      })
+    ).rejects.toThrow('Docling parser returned invalid result: pages[0].pageNumber must be finite');
+  });
+
+  it('rejects malformed element items from successful bridge output', async () => {
+    const runProcess: DoclingProcessRunner = async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        parserName: 'docling',
+        parserVersion: '2.0.0',
+        pages: [],
+        elements: [{ elementId: 'x', kind: 'heading' }],
+        tables: [],
+        diagnostics: [],
+      }),
+      stderr: '',
+    });
+
+    await expect(
+      parseDocumentWithDocling({
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
+        runProcess,
+      })
+    ).rejects.toThrow('Docling parser returned invalid result: elements[0].text must be a string');
+  });
+
+  it('rejects malformed table items from successful bridge output', async () => {
+    const runProcess: DoclingProcessRunner = async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        parserName: 'docling',
+        parserVersion: '2.0.0',
+        pages: [],
+        elements: [],
+        tables: [{ elementId: 't1', caption: 'Table' }],
+        diagnostics: [],
+      }),
+      stderr: '',
+    });
+
+    await expect(
+      parseDocumentWithDocling({
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
+        runProcess,
+      })
+    ).rejects.toThrow('Docling parser returned invalid result: tables[0].pageNumber must be finite');
+  });
+
   it('passes timeoutMs to the process runner', async () => {
     const runProcess: DoclingProcessRunner = async (_command, _args, options) => {
       expect(options?.timeoutMs).toBe(1234);
