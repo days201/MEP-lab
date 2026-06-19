@@ -77,6 +77,30 @@ describe('building-code document registry', () => {
     expect(await reloaded.get('doc-1')).toMatchObject({ status: 'ready' });
   });
 
+  it('preserves concurrent unique upserts from the same registry instance', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registry = new DocumentRegistry(path.join(root, 'documents.json'));
+    const documents = Array.from({ length: 50 }, (_, index) =>
+      record({
+        documentId: `doc-${index}`,
+        originalFilename: `NBC-${index}.pdf`,
+        sourceChecksum: `sha256:${index}`,
+        sourcePath: `/tmp/NBC-${index}.pdf`,
+        sourceUri: `kb://building-code/doc-${index}/NBC-${index}.pdf`,
+      })
+    );
+
+    const results = await Promise.allSettled(documents.map((document) => registry.upsert(document)));
+
+    const persisted = await registry.list();
+    expect(results.filter((result) => result.status === 'rejected')).toEqual([]);
+    expect(persisted).toHaveLength(documents.length);
+    expect(persisted.map((document) => document.documentId).sort()).toEqual(
+      documents.map((document) => document.documentId).sort()
+    );
+  });
+
   it('rejects unsupported registry versions', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
     roots.push(root);

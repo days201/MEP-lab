@@ -12,6 +12,8 @@ const supportedVersion = 1;
 const malformedDocumentsMessage = 'Malformed knowledge-base document registry documents';
 
 export class DocumentRegistry {
+  private writeQueue: Promise<void> = Promise.resolve();
+
   constructor(private readonly registryPath: string) {}
 
   async list(): Promise<KnowledgeBaseDocumentRecord[]> {
@@ -23,36 +25,49 @@ export class DocumentRegistry {
   }
 
   async upsert(record: KnowledgeBaseDocumentRecord): Promise<void> {
-    const registry = await this.read();
-    const existingIndex = registry.documents.findIndex(
-      (document) => document.documentId === record.documentId
-    );
+    await this.enqueueWrite(async () => {
+      const registry = await this.read();
+      const existingIndex = registry.documents.findIndex(
+        (document) => document.documentId === record.documentId
+      );
 
-    if (existingIndex === -1) {
-      registry.documents.push(record);
-    } else {
-      registry.documents[existingIndex] = record;
-    }
+      if (existingIndex === -1) {
+        registry.documents.push(record);
+      } else {
+        registry.documents[existingIndex] = record;
+      }
 
-    await this.write(registry.documents);
+      await this.write(registry.documents);
+    });
   }
 
-  async markRemoved(documentId: string, removedAt: string): Promise<void> {
-    const registry = await this.read();
-    const existingIndex = registry.documents.findIndex((document) => document.documentId === documentId);
+  async markRemoved(documentId: string, nowIso: string): Promise<void> {
+    await this.enqueueWrite(async () => {
+      const registry = await this.read();
+      const existingIndex = registry.documents.findIndex((document) => document.documentId === documentId);
 
-    if (existingIndex === -1) {
-      return;
-    }
+      if (existingIndex === -1) {
+        return;
+      }
 
-    registry.documents[existingIndex] = {
-      ...registry.documents[existingIndex],
-      status: 'removed',
-      lastIndexRebuildAt: removedAt,
-      failureMessage: null,
-    };
+      registry.documents[existingIndex] = {
+        ...registry.documents[existingIndex],
+        status: 'removed',
+        lastIndexRebuildAt: nowIso,
+        failureMessage: null,
+      };
 
-    await this.write(registry.documents);
+      await this.write(registry.documents);
+    });
+  }
+
+  private enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.writeQueue.then(operation, operation);
+    this.writeQueue = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return next;
   }
 
   private async read(): Promise<DocumentRegistryFile> {
