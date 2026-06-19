@@ -1,9 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   DoclingParserUnavailableError,
   parseDocumentWithDocling,
   type DoclingProcessRunner,
 } from '../src/main/mcp/building-code/docling-parser';
+
+const bridgeSourcePath = path.resolve(
+  __dirname,
+  '../src/main/mcp/building-code/docling_bridge.py'
+);
 
 describe('building-code Docling parser bridge', () => {
   it('normalizes bridge JSON from stdout', async () => {
@@ -105,6 +112,9 @@ describe('building-code Docling parser bridge', () => {
     const runProcess: DoclingProcessRunner = async (command, args) => {
       expect(command).toBe('py');
       expect(args[0].replace(/\\/g, '/')).toMatch(/building-code\/docling_bridge\.py$/);
+      expect(args[0].replace(/\\/g, '/')).not.toContain(
+        'building-code/building-code/docling_bridge.py'
+      );
       expect(args[1]).toBe('C:\\codes\\ashrae-34.pdf');
 
       return {
@@ -128,6 +138,15 @@ describe('building-code Docling parser bridge', () => {
     });
   });
 
+  it('keeps a bundled staged bridge path candidate for packaged MCP runtime', () => {
+    const parserSource = fs.readFileSync(
+      path.resolve(__dirname, '../src/main/mcp/building-code/docling-parser.ts'),
+      'utf8'
+    );
+
+    expect(parserSource).toContain("path.join(__dirname, 'building-code', 'docling_bridge.py')");
+  });
+
   it('rejects raw missing module output with an actionable error', async () => {
     const runProcess: DoclingProcessRunner = async () => ({
       exitCode: 2,
@@ -148,7 +167,7 @@ describe('building-code Docling parser bridge', () => {
     const runProcess: DoclingProcessRunner = async () => ({
       exitCode: 2,
       stdout: '',
-      stderr: 'ImportError: cannot import name DocumentConverter',
+      stderr: 'ImportError: cannot import name DocumentConverter from docling.document_converter',
     });
 
     await expect(
@@ -158,5 +177,72 @@ describe('building-code Docling parser bridge', () => {
         runProcess,
       })
     ).rejects.toThrow(DoclingParserUnavailableError);
+  });
+
+  it('does not classify unrelated missing modules as Docling unavailable', async () => {
+    const runProcess: DoclingProcessRunner = async () => ({
+      exitCode: 2,
+      stdout: '',
+      stderr: "ModuleNotFoundError: No module named 'pandas'",
+    });
+
+    await expect(
+      parseDocumentWithDocling({
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
+        runProcess,
+      })
+    ).rejects.toThrow("Docling parser failed: ModuleNotFoundError: No module named 'pandas'");
+  });
+
+  it('rejects successful bridge output with an invalid result shape', async () => {
+    const runProcess: DoclingProcessRunner = async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({ error: 'boom' }),
+      stderr: '',
+    });
+
+    await expect(
+      parseDocumentWithDocling({
+        filePath: 'C:\\codes\\ashrae-15.pdf',
+        pythonPath: 'python',
+        runProcess,
+      })
+    ).rejects.toThrow('Docling parser returned invalid result: parserName must be docling');
+  });
+
+  it('passes timeoutMs to the process runner', async () => {
+    const runProcess: DoclingProcessRunner = async (_command, _args, options) => {
+      expect(options?.timeoutMs).toBe(1234);
+
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({
+          parserName: 'docling',
+          parserVersion: '2.0.0',
+          pages: [],
+          elements: [],
+          tables: [],
+          diagnostics: [],
+        }),
+        stderr: '',
+      };
+    };
+
+    await parseDocumentWithDocling({
+      filePath: 'C:\\codes\\ashrae-15.pdf',
+      pythonPath: 'python',
+      timeoutMs: 1234,
+      runProcess,
+    });
+  });
+
+  it('keeps the Python bridge local-only and offline by construction', () => {
+    const bridgeSource = fs.readFileSync(bridgeSourcePath, 'utf8');
+
+    expect(bridgeSource).toContain('HF_HUB_OFFLINE');
+    expect(bridgeSource).toContain('TRANSFORMERS_OFFLINE');
+    expect(bridgeSource).toMatch(/https?\:\/\//);
+    expect(bridgeSource).toContain('Path(args.document_path).is_file()');
   });
 });

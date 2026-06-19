@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 
 export interface NormalizedDoclingPage {
@@ -41,17 +42,23 @@ export interface ProcessResult {
   stderr: string;
 }
 
+export interface DoclingProcessOptions {
+  timeoutMs: number;
+}
+
 export type DoclingProcessResult = ProcessResult;
 
 export type DoclingProcessRunner = (
   command: string,
-  args: string[]
+  args: string[],
+  options?: DoclingProcessOptions
 ) => Promise<ProcessResult>;
 
 export interface ParseDocumentWithDoclingInput {
   filePath: string;
   pythonPath: string;
   bridgePath?: string;
+  timeoutMs?: number;
   runProcess?: DoclingProcessRunner;
 }
 
@@ -65,7 +72,7 @@ export class DoclingParserUnavailableError extends Error {
   }
 }
 
-const bridgePath = path.join(__dirname, 'building-code', 'docling_bridge.py');
+const DEFAULT_DOCLING_TIMEOUT_MS = 5 * 60 * 1000;
 const supportedKinds = new Set<NormalizedDoclingElement['kind']>([
   'heading',
   'text',
@@ -79,8 +86,10 @@ export async function parseDocumentWithDocling(
   input: ParseDocumentWithDoclingInput
 ): Promise<NormalizedDoclingResult> {
   const command = input.pythonPath;
-  const args = [input.bridgePath ?? bridgePath, input.filePath];
-  const result = await (input.runProcess ?? runProcess)(command, args);
+  const args = [input.bridgePath ?? resolveDefaultBridgePath(), input.filePath];
+  const result = await (input.runProcess ?? runProcess)(command, args, {
+    timeoutMs: input.timeoutMs ?? DEFAULT_DOCLING_TIMEOUT_MS,
+  });
 
   if (result.exitCode !== 0) {
     throwParserProcessError(result);
@@ -97,11 +106,44 @@ export async function parseDocumentWithDocling(
   return normalizeDoclingResult(parsed);
 }
 
-function runProcess(command: string, args: string[]): Promise<ProcessResult> {
+function resolveDefaultBridgePath(): string {
+  const candidates = [
+    path.join(__dirname, 'docling_bridge.py'),
+    path.join(__dirname, 'building-code', 'docling_bridge.py'),
+    path.resolve(process.cwd(), 'src/main/mcp/building-code/docling_bridge.py'),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
+}
+
+function runProcess(
+  command: string,
+  args: string[],
+  options: DoclingProcessOptions = { timeoutMs: DEFAULT_DOCLING_TIMEOUT_MS }
+): Promise<ProcessResult> {
   return new Promise((resolve) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const timeout = setTimeout(() => {
+      finish({
+        exitCode: 1,
+        stdout,
+        stderr: `Docling parser timed out after ${options.timeoutMs}ms`,
+      });
+      child.kill();
+    }, options.timeoutMs);
+
+    const finish = (result: ProcessResult) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      resolve(result);
+    };
 
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -112,10 +154,10 @@ function runProcess(command: string, args: string[]): Promise<ProcessResult> {
       stderr += chunk;
     });
     child.on('error', (error) => {
-      resolve({ exitCode: 1, stdout, stderr: stderr || error.message });
+      finish({ exitCode: 1, stdout, stderr: stderr || error.message });
     });
     child.on('close', (exitCode) => {
-      resolve({ exitCode, stdout, stderr });
+      finish({ exitCode, stdout, stderr });
     });
   });
 }
@@ -136,12 +178,14 @@ function throwParserProcessError(result: ProcessResult): never {
 function isMissingDoclingImport(output: string): boolean {
   return (
     /No module named\s+['"]?docling['"]?/i.test(output) ||
-    /\bModuleNotFoundError\b/i.test(output) ||
-    /\bImportError\b/i.test(output)
+    /ModuleNotFoundError:\s+No module named ['"]?docling['"]?/i.test(output) ||
+    /ImportError:.*docling/i.test(output) ||
+    /ImportError:.*DocumentConverter.*docling/i.test(output)
   );
 }
 
 function normalizeDoclingResult(value: unknown): NormalizedDoclingResult {
+  validateDoclingResult(value);
   const record = asRecord(value);
 
   return {
@@ -152,6 +196,30 @@ function normalizeDoclingResult(value: unknown): NormalizedDoclingResult {
     tables: asArray(record.tables).map(normalizeTable),
     diagnostics: asArray(record.diagnostics).map((diagnostic) => asString(diagnostic, '')),
   };
+}
+
+function validateDoclingResult(value: unknown): asserts value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throwInvalidResult('root must be an object');
+  }
+
+  const record = value as Record<string, unknown>;
+  if (record.parserName !== 'docling') {
+    throwInvalidResult('parserName must be docling');
+  }
+  if (typeof record.parserVersion !== 'string') {
+    throwInvalidResult('parserVersion must be a string');
+  }
+
+  for (const key of ['pages', 'elements', 'tables', 'diagnostics']) {
+    if (!Array.isArray(record[key])) {
+      throwInvalidResult(`${key} must be an array`);
+    }
+  }
+}
+
+function throwInvalidResult(message: string): never {
+  throw new Error(`Docling parser returned invalid result: ${message}`);
 }
 
 function normalizePage(value: unknown, index: number): NormalizedDoclingPage {

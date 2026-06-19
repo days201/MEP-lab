@@ -5,16 +5,41 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 from collections import defaultdict
 from importlib import metadata
+from pathlib import Path
 from typing import Any
+
+
+LOCAL_ONLY_ENV = {
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "HF_DATASETS_OFFLINE": "1",
+    "HF_HUB_DISABLE_TELEMETRY": "1",
+}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Parse a document with local Docling.")
     parser.add_argument("document_path", help="Path to a local PDF or supported document file.")
     args = parser.parse_args()
+
+    configure_offline_environment()
+
+    if is_url_like(args.document_path):
+        print(
+            "Remote document URLs such as http:// or https:// are not allowed; "
+            "provide an existing local file path.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if not Path(args.document_path).is_file():
+        print(f"Document path must be an existing local file: {args.document_path}", file=sys.stderr)
+        return 2
 
     try:
         from docling.document_converter import DocumentConverter
@@ -27,7 +52,7 @@ def main() -> int:
 
     diagnostics: list[str] = []
     converter = DocumentConverter()
-    conversion = converter.convert(args.document_path)
+    conversion = converter.convert(str(Path(args.document_path)))
     document = getattr(conversion, "document", conversion)
 
     pages: dict[int, list[str]] = defaultdict(list)
@@ -79,6 +104,15 @@ def main() -> int:
 
     print(json.dumps(result, ensure_ascii=False))
     return 0
+
+
+def configure_offline_environment() -> None:
+    for key, value in LOCAL_ONLY_ENV.items():
+        os.environ.setdefault(key, value)
+
+
+def is_url_like(value: str) -> bool:
+    return re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", value) is not None
 
 
 def iter_document_items(document: Any) -> list[tuple[Any, int | None]]:
