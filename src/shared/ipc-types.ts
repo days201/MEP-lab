@@ -157,3 +157,98 @@ export interface RemoteSessionMapping {
   createdAt: number;
   lastActiveAt: number;
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge Base
+// ---------------------------------------------------------------------------
+
+export type KnowledgeBaseCodeNodeType =
+  | 'section'
+  | 'subsection'
+  | 'table'
+  | 'table-row'
+  | 'table-note'
+  | 'figure'
+  | 'definition'
+  | 'appendix'
+  | 'note';
+
+export type KnowledgeBaseDocumentStatus =
+  | 'queued'
+  | 'parsing'
+  | 'embedding'
+  | 'ready'
+  | 'ready_with_warnings'
+  | 'failed'
+  | 'removed';
+
+export interface KnowledgeBaseDocumentMetadata {
+  codeFamily: string;
+  edition: string;
+  jurisdictionScope: string;
+  sourceTitle: string;
+}
+
+export interface KnowledgeBaseDocumentRecord {
+  documentId: string;
+  originalFilename: string;
+  detectedFileType: string;
+  mimeType: string;
+  sourceChecksum: string;
+  sourcePath: string;
+  sourceUri: string;
+  parserName: 'docling';
+  parserVersion: string;
+  status: KnowledgeBaseDocumentStatus;
+  uploadedAt: string;
+  parseStartedAt: string | null;
+  parseCompletedAt: string | null;
+  lastIndexRebuildAt: string | null;
+  metadata: KnowledgeBaseDocumentMetadata;
+  diagnostics: KnowledgeBaseDiagnostic[];
+  failureMessage: string | null;
+  indexSummary: KnowledgeBaseIndexSummary;
+}
+
+export interface KnowledgeBaseDiagnostic {
+  severity: 'info' | 'warning' | 'error';
+  phase: 'validation' | 'parse' | 'canonicalize' | 'cross_reference' | 'embedding' | 'index';
+  message: string;
+  documentId?: string;
+  logicalRef?: string;
+  pageRange?: string;
+  sourceElementId?: string;
+}
+
+export interface KnowledgeBaseIndexSummary {
+  nodeCount: number;
+  tableCount: number;
+  chunkCount: number;
+  resolvedReferenceCount: number;
+  unresolvedReferenceCount: number;
+  sectionCount: number;
+  semanticSearchAvailable: boolean;
+}
+
+export interface KnowledgeBaseOverview {
+  storageRoot: string;
+  activeIndexDir: string;
+  documents: KnowledgeBaseDocumentRecord[];
+  summary: KnowledgeBaseIndexSummary;
+  diagnostics: KnowledgeBaseDiagnostic[];
+  graph: KnowledgeBaseGraphSummary;
+}
+
+export interface KnowledgeBaseGraphSummary {
+  sectionCount: number;
+  tableCount: number;
+  referenceEdgeCount: number;
+  unresolvedReferenceCount: number;
+  nodes: Array<{ nodeId: string; logicalRef: string; title: string; nodeType: KnowledgeBaseCodeNodeType }>;
+  edges: Array<{
+    fromNodeId: string;
+    targetNodeId: string | null;
+    rawText: string;
+    status: 'resolved' | 'unresolved';
+  }>;
+}

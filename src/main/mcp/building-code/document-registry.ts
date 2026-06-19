@@ -1,0 +1,90 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import type { KnowledgeBaseDocumentRecord } from '../../../shared/ipc-types';
+
+interface DocumentRegistryFile {
+  version: 1;
+  documents: KnowledgeBaseDocumentRecord[];
+}
+
+const supportedVersion = 1;
+
+export class DocumentRegistry {
+  constructor(private readonly registryPath: string) {}
+
+  async list(): Promise<KnowledgeBaseDocumentRecord[]> {
+    return (await this.read()).documents;
+  }
+
+  async get(documentId: string): Promise<KnowledgeBaseDocumentRecord | undefined> {
+    return (await this.read()).documents.find((document) => document.documentId === documentId);
+  }
+
+  async upsert(record: KnowledgeBaseDocumentRecord): Promise<void> {
+    const registry = await this.read();
+    const existingIndex = registry.documents.findIndex(
+      (document) => document.documentId === record.documentId
+    );
+
+    if (existingIndex === -1) {
+      registry.documents.push(record);
+    } else {
+      registry.documents[existingIndex] = record;
+    }
+
+    await this.write(registry.documents);
+  }
+
+  async markRemoved(documentId: string, removedAt: string): Promise<void> {
+    void removedAt;
+
+    const registry = await this.read();
+    const existingIndex = registry.documents.findIndex((document) => document.documentId === documentId);
+
+    if (existingIndex === -1) {
+      return;
+    }
+
+    registry.documents[existingIndex] = {
+      ...registry.documents[existingIndex],
+      status: 'removed',
+      failureMessage: null,
+    };
+
+    await this.write(registry.documents);
+  }
+
+  private async read(): Promise<DocumentRegistryFile> {
+    try {
+      const registry = JSON.parse(await fs.readFile(this.registryPath, 'utf8')) as Partial<DocumentRegistryFile>;
+
+      if (registry.version !== supportedVersion) {
+        throw new Error('Unsupported knowledge-base document registry version');
+      }
+
+      return {
+        version: supportedVersion,
+        documents: Array.isArray(registry.documents) ? registry.documents : [],
+      };
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return { version: supportedVersion, documents: [] };
+      }
+
+      throw error;
+    }
+  }
+
+  private async write(documents: KnowledgeBaseDocumentRecord[]): Promise<void> {
+    const directory = path.dirname(this.registryPath);
+    const tempPath = path.join(directory, `.${path.basename(this.registryPath)}.${process.pid}.${Date.now()}.tmp`);
+
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(tempPath, `${JSON.stringify({ version: supportedVersion, documents }, null, 2)}\n`, 'utf8');
+    await fs.rename(tempPath, this.registryPath);
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
