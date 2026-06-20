@@ -75,6 +75,8 @@ win:
       to: node
     - from: resources/node/win32-x64/node_modules/npm
       to: node/node_modules/npm
+    - from: resources/python/win32-x64
+      to: python
     - from: dist-wsl-agent
       to: wsl-agent
     - from: .claude/skills
@@ -105,7 +107,7 @@ mac:
       to: node
     - from: resources/node/darwin-${arch}/lib/node_modules/npm
       to: node/lib/node_modules/npm
-    # Bundled Python runtime + site-packages for GUI automation helpers (Pillow, pyobjc/Quartz)
+    # Bundled Python runtime + site-packages for GUI automation and Knowledge Base parsing
     - from: resources/python/darwin-${arch}
       to: python
     # Bundled GUI helper tools (e.g. cliclick) to avoid relying on user-installed Homebrew tools
