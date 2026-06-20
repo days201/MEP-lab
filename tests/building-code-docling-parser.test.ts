@@ -64,7 +64,14 @@ describe('building-code Docling parser bridge', () => {
     ).resolves.toEqual({
       parserName: 'docling',
       parserVersion: '2.0.0',
-      pages: [{ pageNumber: 1, text: 'Section 7 Refrigerant Safety' }],
+      pages: [
+        {
+          pageNumber: 1,
+          text: 'Section 7 Refrigerant Safety',
+          extractionMode: 'native',
+          boundingBoxes: [],
+        },
+      ],
       elements: [
         {
           elementId: 'element-1',
@@ -74,6 +81,7 @@ describe('building-code Docling parser bridge', () => {
           level: 1,
           confidence: 0.98,
           bbox: { x: 10, y: 20, width: 200, height: 30 },
+          sourceIds: ['element-1'],
         },
       ],
       tables: [
@@ -85,9 +93,19 @@ describe('building-code Docling parser bridge', () => {
           rows: [['R-32', '0.30 kg/m3']],
           notes: ['Use the lowest applicable limit.'],
           confidence: 0.91,
+          sourceIds: ['table-1'],
         },
       ],
       diagnostics: ['converted with local Docling'],
+      pageDiagnostics: [
+        {
+          pageNumber: 1,
+          extractionMode: 'native',
+          severity: 'info',
+          message: 'Docling native extraction accepted',
+          reasons: [],
+        },
+      ],
     });
   });
 

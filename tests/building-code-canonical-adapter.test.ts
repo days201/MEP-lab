@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { adaptDoclingToBuildingCodeIndex } from '../src/main/mcp/building-code/canonical-adapter';
+import {
+  adaptDoclingToBuildingCodeIndex,
+  adaptParserDocumentToBuildingCodeIndex,
+} from '../src/main/mcp/building-code/canonical-adapter';
 import { detectBuildingCodeHeading } from '../src/main/mcp/building-code/heading-detector';
 import { buildStructuredTables } from '../src/main/mcp/building-code/table';
 import type { NormalizedDoclingResult } from '../src/main/mcp/building-code/docling-parser';
+import type { NormalizedParserDocument } from '../src/main/mcp/building-code/parser-adapter';
 import type { CodeNodeRecord, CodeSourceRecord } from '../src/main/mcp/building-code/types';
 import type { KnowledgeBaseDocumentRecord } from '../src/shared/ipc-types';
 
@@ -50,8 +54,15 @@ function parsedDocument(): NormalizedDoclingResult {
       {
         pageNumber: 1,
         text: 'Section 9.10.3.1 Fire separations\nFire separations shall comply with Table 9.10.3.1.',
+        extractionMode: 'native',
+        boundingBoxes: [],
       },
-      { pageNumber: 2, text: 'Table 9.10.3.1 Ratings\nType | Rating\nWall | 1 h' },
+      {
+        pageNumber: 2,
+        text: 'Table 9.10.3.1 Ratings\nType | Rating\nWall | 1 h',
+        extractionMode: 'native',
+        boundingBoxes: [],
+      },
     ],
     elements: [
       {
@@ -62,6 +73,7 @@ function parsedDocument(): NormalizedDoclingResult {
         level: 2,
         confidence: 0.98,
         bbox: { x: 10, y: 10, width: 200, height: 24 },
+        sourceIds: ['h1'],
       },
       {
         elementId: 'p1',
@@ -71,6 +83,7 @@ function parsedDocument(): NormalizedDoclingResult {
         level: null,
         confidence: 0.99,
         bbox: null,
+        sourceIds: ['p1'],
       },
       {
         elementId: 't1',
@@ -80,6 +93,7 @@ function parsedDocument(): NormalizedDoclingResult {
         level: null,
         confidence: 0.96,
         bbox: null,
+        sourceIds: ['t1'],
       },
     ],
     tables: [
@@ -91,9 +105,26 @@ function parsedDocument(): NormalizedDoclingResult {
         rows: [['Wall', '1 h']],
         notes: ['Note 1: Applies to fire separations.'],
         confidence: 0.96,
+        sourceIds: ['t1'],
       },
     ],
     diagnostics: [],
+    pageDiagnostics: [
+      {
+        pageNumber: 1,
+        extractionMode: 'native',
+        severity: 'info',
+        message: 'Docling native extraction accepted',
+        reasons: [],
+      },
+      {
+        pageNumber: 2,
+        extractionMode: 'native',
+        severity: 'info',
+        message: 'Docling native extraction accepted',
+        reasons: [],
+      },
+    ],
   };
 }
 
@@ -221,6 +252,7 @@ describe('building-code canonical adapter', () => {
             level: null,
             confidence: 0.94,
             bbox: { x: 20, y: 80, width: 300, height: 120 },
+            sourceIds: ['body-table'],
           },
         ],
         tables: [
@@ -232,6 +264,7 @@ describe('building-code canonical adapter', () => {
             rows: [['Wall', '1 h']],
             notes: ['Note 1: Applies to major occupancies.'],
             confidence: 0.94,
+            sourceIds: ['body-table'],
           },
         ],
       },
@@ -275,6 +308,7 @@ describe('building-code canonical adapter', () => {
             level: null,
             confidence: 0.96,
             bbox: null,
+            sourceIds: ['matched-heading'],
           },
           {
             elementId: 'unmatched-heading',
@@ -284,6 +318,7 @@ describe('building-code canonical adapter', () => {
             level: null,
             confidence: 0.95,
             bbox: null,
+            sourceIds: ['unmatched-heading'],
           },
           {
             elementId: 'unmatched-markdown',
@@ -293,6 +328,7 @@ describe('building-code canonical adapter', () => {
             level: null,
             confidence: 0.93,
             bbox: null,
+            sourceIds: ['unmatched-markdown'],
           },
         ],
         tables: [
@@ -304,6 +340,7 @@ describe('building-code canonical adapter', () => {
             rows: [['Wall', '1 h']],
             notes: [],
             confidence: 0.96,
+            sourceIds: ['matched-heading'],
           },
         ],
       },
@@ -346,6 +383,7 @@ describe('building-code canonical adapter', () => {
           rows: [['Suite door', '45 min']],
           notes: [],
           confidence: 0.94,
+          sourceIds: ['docling-table-body'],
         },
       ],
       sourceRecord()
@@ -377,6 +415,63 @@ describe('building-code canonical adapter', () => {
       '2.1.4-docling',
       '2.1.4-docling',
     ]);
+  });
+
+  it('uses LiteParse parser provenance from parser-neutral documents', () => {
+    const parsed: NormalizedParserDocument = {
+      parserName: 'liteparse',
+      parserVersion: '2.0.0-liteparse',
+      pages: [
+        {
+          pageNumber: 1,
+          text: 'Section 9.10.3.1 Fire separations\nFire separations shall comply.',
+          extractionMode: 'native',
+          boundingBoxes: [{ x: 10, y: 20, width: 200, height: 16 }],
+        },
+      ],
+      elements: [
+        {
+          elementId: 'lp-heading-1',
+          kind: 'heading',
+          text: 'Section 9.10.3.1 Fire separations',
+          pageNumber: 1,
+          level: 2,
+          confidence: 0.99,
+          bbox: { x: 10, y: 20, width: 200, height: 16 },
+          sourceIds: ['text-item-1'],
+        },
+        {
+          elementId: 'lp-body-1',
+          kind: 'text',
+          text: 'Fire separations shall comply.',
+          pageNumber: 1,
+          level: null,
+          confidence: 0.97,
+          bbox: null,
+          sourceIds: ['text-item-2'],
+        },
+      ],
+      tables: [],
+      diagnostics: ['Parsed 1 pages. OCR used on 0 pages.'],
+      pageDiagnostics: [
+        {
+          pageNumber: 1,
+          extractionMode: 'native',
+          severity: 'info',
+          message: 'Native extraction accepted',
+          reasons: [],
+        },
+      ],
+    };
+
+    const index = adaptParserDocumentToBuildingCodeIndex(parsed, {
+      ...documentRecord(),
+      parserName: 'docling',
+      parserVersion: 'queued-record-version',
+    });
+
+    expect(index.nodes.map((node) => node.parser.name)).toEqual(['liteparse']);
+    expect(index.nodes.map((node) => node.parser.version)).toEqual(['2.0.0-liteparse']);
   });
 
   it('preserves bounding boxes from content elements attached to the current node', () => {
@@ -418,6 +513,7 @@ describe('building-code canonical adapter', () => {
             level: null,
             confidence: 0.94,
             bbox: { x: 24, y: 88, width: 320, height: 140 },
+            sourceIds: ['captioned-table-body'],
           },
         ],
         tables: [
@@ -429,6 +525,7 @@ describe('building-code canonical adapter', () => {
             rows: [['Suite door', '45 min']],
             notes: [],
             confidence: 0.94,
+            sourceIds: ['captioned-table-body'],
           },
         ],
       },
@@ -490,6 +587,8 @@ describe('building-code canonical adapter', () => {
             {
               pageNumber: 1,
               text: 'Overview\nTable 9.10.3.1 Ratings\nType | Rating\nWall | 1 h',
+              extractionMode: 'native',
+              boundingBoxes: [],
             },
           ],
           elements: [
@@ -501,6 +600,7 @@ describe('building-code canonical adapter', () => {
               level: null,
               confidence: 0.99,
               bbox: null,
+              sourceIds: ['intro'],
             },
             {
               elementId: 'table-body',
@@ -510,6 +610,7 @@ describe('building-code canonical adapter', () => {
               level: null,
               confidence: 0.96,
               bbox: null,
+              sourceIds: ['table-body'],
             },
           ],
           tables: [
@@ -521,6 +622,7 @@ describe('building-code canonical adapter', () => {
               rows: [['Wall', '1 h']],
               notes: [],
               confidence: 0.96,
+              sourceIds: ['table-body'],
             },
           ],
         },

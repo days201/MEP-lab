@@ -1,40 +1,18 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  normalizeParserDocument,
+  type NormalizedParserDocument,
+  type NormalizedParserElement,
+  type NormalizedParserPage,
+  type NormalizedParserTable,
+} from './parser-adapter';
 
-export interface NormalizedDoclingPage {
-  pageNumber: number;
-  text: string;
-}
-
-export interface NormalizedDoclingElement {
-  elementId: string;
-  kind: 'heading' | 'text' | 'table' | 'figure' | 'list' | 'unknown';
-  text: string;
-  pageNumber: number;
-  level: number | null;
-  confidence: number;
-  bbox: { x: number; y: number; width: number; height: number } | null;
-}
-
-export interface NormalizedDoclingTable {
-  elementId: string;
-  caption: string;
-  pageNumber: number;
-  columns: string[];
-  rows: string[][];
-  notes: string[];
-  confidence: number;
-}
-
-export interface NormalizedDoclingResult {
-  parserName: 'docling';
-  parserVersion: string;
-  pages: NormalizedDoclingPage[];
-  elements: NormalizedDoclingElement[];
-  tables: NormalizedDoclingTable[];
-  diagnostics: string[];
-}
+export type NormalizedDoclingPage = NormalizedParserPage;
+export type NormalizedDoclingElement = NormalizedParserElement;
+export type NormalizedDoclingTable = NormalizedParserTable;
+export type NormalizedDoclingResult = NormalizedParserDocument & { parserName: 'docling' };
 
 export interface ProcessResult {
   exitCode: number | null;
@@ -231,14 +209,21 @@ function normalizeDoclingResult(value: unknown): NormalizedDoclingResult {
   validateDoclingResult(value);
   const record = asRecord(value);
 
-  return {
+  return normalizeParserDocument({
     parserName: 'docling',
     parserVersion: asString(record.parserVersion, 'unknown'),
     pages: asArray(record.pages).map(normalizePage),
     elements: asArray(record.elements).map(normalizeElement),
     tables: asArray(record.tables).map(normalizeTable),
     diagnostics: asArray(record.diagnostics).map((diagnostic) => asString(diagnostic, '')),
-  };
+    pageDiagnostics: asArray(record.pages).map((page, index) => ({
+      pageNumber: asNumber(asRecord(page).pageNumber, index + 1),
+      extractionMode: 'native',
+      severity: 'info',
+      message: 'Docling native extraction accepted',
+      reasons: [],
+    })),
+  }) as NormalizedDoclingResult;
 }
 
 function validateDoclingResult(value: unknown): asserts value is Record<string, unknown> {
@@ -375,15 +360,18 @@ function normalizePage(value: unknown, index: number): NormalizedDoclingPage {
   return {
     pageNumber: asNumber(record.pageNumber, index + 1),
     text: asString(record.text, ''),
+    extractionMode: 'native',
+    boundingBoxes: [],
   };
 }
 
 function normalizeElement(value: unknown, index: number): NormalizedDoclingElement {
   const record = asRecord(value);
   const kind = asString(record.kind, 'unknown');
+  const elementId = asString(record.elementId, `element-${index + 1}`);
 
   return {
-    elementId: asString(record.elementId, `element-${index + 1}`),
+    elementId,
     kind: supportedKinds.has(kind as NormalizedDoclingElement['kind'])
       ? (kind as NormalizedDoclingElement['kind'])
       : 'unknown',
@@ -392,14 +380,16 @@ function normalizeElement(value: unknown, index: number): NormalizedDoclingEleme
     level: asNullableNumber(record.level),
     confidence: asNumber(record.confidence, 1),
     bbox: normalizeBbox(record.bbox),
+    sourceIds: [elementId],
   };
 }
 
 function normalizeTable(value: unknown, index: number): NormalizedDoclingTable {
   const record = asRecord(value);
+  const elementId = asString(record.elementId, `table-${index + 1}`);
 
   return {
-    elementId: asString(record.elementId, `table-${index + 1}`),
+    elementId,
     caption: asString(record.caption, ''),
     pageNumber: asNumber(record.pageNumber, 1),
     columns: asArray(record.columns).map((column) => asString(column, '')),
@@ -408,6 +398,7 @@ function normalizeTable(value: unknown, index: number): NormalizedDoclingTable {
     ),
     notes: asArray(record.notes).map((note) => asString(note, '')),
     confidence: asNumber(record.confidence, 1),
+    sourceIds: [elementId],
   };
 }
 

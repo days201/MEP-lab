@@ -4,10 +4,10 @@ import { detectBuildingCodeHeading } from './heading-detector';
 import { stableNodeId, stableRecordId } from './hierarchy';
 import { buildStructuredTables } from './table';
 import type {
-  NormalizedDoclingElement,
-  NormalizedDoclingResult,
-  NormalizedDoclingTable,
-} from './docling-parser';
+  NormalizedParserDocument,
+  NormalizedParserElement,
+  NormalizedParserTable,
+} from './parser-adapter';
 import type { BuildingCodeIngestionIndex } from './ingest';
 import type { PageText } from './pdf-extract';
 import type { CodeNodeRecord, CodeSourceRecord } from './types';
@@ -18,8 +18,8 @@ interface StackEntry {
   node: CodeNodeRecord;
 }
 
-export function adaptDoclingToBuildingCodeIndex(
-  parsed: NormalizedDoclingResult,
+export function adaptParserDocumentToBuildingCodeIndex(
+  parsed: NormalizedParserDocument,
   document: KnowledgeBaseDocumentRecord
 ): BuildingCodeIngestionIndex {
   const source: CodeSourceRecord = {
@@ -56,9 +56,16 @@ export function adaptDoclingToBuildingCodeIndex(
     chunks,
     tables,
     crossReferences,
-    diagnostics: parsed.diagnostics,
+    diagnostics: [
+      ...parsed.diagnostics,
+      ...parsed.pageDiagnostics
+        .filter((diagnostic) => diagnostic.severity !== 'info')
+        .map((diagnostic) => `Page ${diagnostic.pageNumber}: ${diagnostic.message}`),
+    ],
   };
 }
+
+export const adaptDoclingToBuildingCodeIndex = adaptParserDocumentToBuildingCodeIndex;
 
 function hasStructuralBuildingCodeHeading(nodes: CodeNodeRecord[]): boolean {
   return nodes.some((node) =>
@@ -67,13 +74,14 @@ function hasStructuralBuildingCodeHeading(nodes: CodeNodeRecord[]): boolean {
 }
 
 function buildNodes(
-  parsed: NormalizedDoclingResult,
+  parsed: NormalizedParserDocument,
   source: CodeSourceRecord,
   document: KnowledgeBaseDocumentRecord
 ): CodeNodeRecord[] {
   const nodes: CodeNodeRecord[] = [];
   const stack: StackEntry[] = [];
   const parserVersion = parsed.parserVersion;
+  const parserName = parsed.parserName;
 
   for (const element of parsed.elements) {
     const heading = detectBuildingCodeHeading(element.text);
@@ -96,7 +104,7 @@ function buildNodes(
         childNodeIds: [],
         extractionConfidence: element.confidence,
         parser: {
-          name: 'docling',
+          name: parserName,
           version: parserVersion,
           sourceElementIds: [element.elementId],
           pageRange: String(element.pageNumber),
@@ -126,16 +134,17 @@ function buildNodes(
     expandPageRange(current, element.pageNumber);
   }
 
-  attachTableText(nodes, parsed.tables, parsed.elements, source, document, parserVersion);
+  attachTableText(nodes, parsed.tables, parsed.elements, source, document, parserName, parserVersion);
   return nodes.map((node) => ({ ...node, text: node.text.trim() }));
 }
 
 function attachTableText(
   nodes: CodeNodeRecord[],
-  tables: NormalizedDoclingTable[],
-  elements: NormalizedDoclingElement[],
+  tables: NormalizedParserTable[],
+  elements: NormalizedParserElement[],
   source: CodeSourceRecord,
   document: KnowledgeBaseDocumentRecord,
+  parserName: NormalizedParserDocument['parserName'],
   parserVersion: string
 ): void {
   const elementsById = new Map(elements.map((element) => [element.elementId, element]));
@@ -148,7 +157,8 @@ function attachTableText(
     const node =
       nodes.find(
         (candidate) => candidate.nodeType === 'table' && candidate.logicalRef === heading.logicalRef
-      ) ?? createTableNodeFromCaption(nodes, table, heading, source, document, parserVersion);
+      ) ??
+      createTableNodeFromCaption(nodes, table, heading, source, document, parserName, parserVersion);
 
     if (!node.parser.sourceElementIds.includes(table.elementId)) {
       node.parser.sourceElementIds.push(table.elementId);
@@ -170,7 +180,7 @@ function attachTableText(
 
 function appendTableElementBoundingBox(
   node: CodeNodeRecord,
-  element: NormalizedDoclingElement | undefined
+  element: NormalizedParserElement | undefined
 ): void {
   if (!element?.bbox) {
     return;
@@ -195,10 +205,11 @@ function appendTableElementBoundingBox(
 
 function createTableNodeFromCaption(
   nodes: CodeNodeRecord[],
-  table: NormalizedDoclingTable,
+  table: NormalizedParserTable,
   heading: NonNullable<ReturnType<typeof detectBuildingCodeHeading>>,
   source: CodeSourceRecord,
   document: KnowledgeBaseDocumentRecord,
+  parserName: NormalizedParserDocument['parserName'],
   parserVersion: string
 ): CodeNodeRecord {
   const parent = findNearestParentNode(nodes, table.pageNumber);
@@ -216,7 +227,7 @@ function createTableNodeFromCaption(
     childNodeIds: [],
     extractionConfidence: table.confidence,
     parser: {
-      name: 'docling',
+      name: parserName,
       version: parserVersion,
       sourceElementIds: [table.elementId],
       pageRange: String(table.pageNumber),
