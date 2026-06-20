@@ -276,7 +276,7 @@ function normalizeCodeTableCitation(
       : parserFallbackNode.extractionConfidence,
     parser: isStructurallyValidParserProvenance(citation.parser)
       ? citation.parser
-      : fallbackParserProvenance(source, parserFallbackNode),
+      : parserFallbackNode.parser,
   };
 }
 

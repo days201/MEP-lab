@@ -445,6 +445,47 @@ describe('building-code canonical adapter', () => {
     expect(nodes[0].tableId).toBe(tables[0].tableId);
   });
 
+  it('matches structured tables to table nodes by sourceIds when element ids differ', () => {
+    const nodes = [
+      tableNode({
+        parser: {
+          name: 'liteparse',
+          version: '2.0.0-liteparse',
+          sourceElementIds: ['table-cell-1'],
+          pageRange: '2',
+          boundingBoxes: [],
+        },
+      }),
+    ];
+
+    const tables = buildStructuredTables(
+      nodes,
+      [
+        {
+          elementId: 'lp-table-wrapper-1',
+          caption: 'Door Ratings',
+          pageNumber: 2,
+          columns: ['Door', 'Rating'],
+          rows: [['Suite door', '45 min']],
+          notes: [],
+          confidence: 0.94,
+          sourceIds: ['table-cell-1', 'table-cell-2'],
+        },
+      ],
+      sourceRecord()
+    );
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0]).toMatchObject({
+      nodeId: nodes[0].nodeId,
+      caption: 'Door Ratings',
+      columns: ['Door', 'Rating'],
+      rows: [expect.objectContaining({ cells: ['Suite door', '45 min'] })],
+    });
+    expect(nodes[0].parser.sourceElementIds).toEqual(['table-cell-1', 'table-cell-2']);
+    expect(nodes[0].tableId).toBe(tables[0].tableId);
+  });
+
   it('uses the parsed Docling parser version for node provenance', () => {
     const index = adaptDoclingToBuildingCodeIndex(
       {

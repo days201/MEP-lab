@@ -108,10 +108,13 @@ function findStructuredTableNode(
   nodes: CodeNodeRecord[],
   parserTable: NormalizedParserTable
 ): CodeNodeRecord | undefined {
+  const sourceElementIds = [...new Set([parserTable.elementId, ...sourceIdsFor(parserTable)])];
   const sourceElementMatch = nodes.find(
     (candidate) =>
       candidate.nodeType === 'table' &&
-      candidate.parser.sourceElementIds.includes(parserTable.elementId)
+      sourceElementIds.some((sourceElementId) =>
+        candidate.parser.sourceElementIds.includes(sourceElementId)
+      )
   );
   if (sourceElementMatch) {
     return sourceElementMatch;
