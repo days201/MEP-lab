@@ -132,6 +132,14 @@ describe('building-code embedding cache', () => {
       embedding: reusedEmbedding,
       embeddingTextHash: currentChunk.embeddingCacheKey,
     });
+    expect(index.vectors).not.toContainEqual(staleVector);
+    expect(
+      index.vectors.filter((vector) =>
+        vector.chunkId === currentChunk.chunkId &&
+        vector.embeddingModel === fakeClient.model &&
+        vector.embeddingTextHash === currentChunk.embeddingCacheKey
+      )
+    ).toHaveLength(1);
   });
 
   it('uses stable embedding cache keys across rebuilds for unchanged source checksum, node id, text, and model', () => {

@@ -87,6 +87,8 @@ export async function embedMissingChunks(
   const reusableVectors = new Map(
     index.vectors.map((vector) => [vectorKey(vector.embeddingTextHash, vector.embeddingModel), vector])
   );
+  const currentChunkIds = new Set(index.chunks.map((chunk) => chunk.chunkId));
+  const relinkedVectorKeys = new Set<string>();
   const relinked: CodeVectorRecord[] = [];
   const missingChunks: CodeChunkRecord[] = [];
 
@@ -97,9 +99,11 @@ export async function embedMissingChunks(
       continue;
     }
 
-    const reusable = reusableVectors.get(vectorKey(chunk.embeddingCacheKey, client.model));
+    const reusableVectorKey = vectorKey(chunk.embeddingCacheKey, client.model);
+    const reusable = reusableVectors.get(reusableVectorKey);
 
     if (reusable) {
+      relinkedVectorKeys.add(reusableVectorKey);
       relinked.push({
         chunkId: chunk.chunkId,
         embeddingModel: client.model,
@@ -123,6 +127,24 @@ export async function embedMissingChunks(
 
   const embedded = missingChunks.map((chunk, index) => vectorForChunk(chunk, client.model, embeddings[index]));
   const created = [...relinked, ...embedded];
+
+  if (relinkedVectorKeys.size > 0) {
+    const retainedVectors = index.vectors.filter((vector) => {
+      const key = vectorKey(vector.embeddingTextHash, vector.embeddingModel);
+
+      if (!relinkedVectorKeys.has(key)) {
+        return true;
+      }
+
+      return currentChunkIds.has(vector.chunkId) && !relinked.some((record) =>
+        record.chunkId === vector.chunkId &&
+        record.embeddingModel === vector.embeddingModel &&
+        record.embeddingTextHash === vector.embeddingTextHash
+      );
+    });
+
+    index.vectors.splice(0, index.vectors.length, ...retainedVectors);
+  }
 
   index.vectors.push(...created);
 
