@@ -78,9 +78,13 @@ export function detectBuildingCodeHeading(text: string): DetectedBuildingCodeHea
     }
     const refNumber = stripTrailingDot(match[2]);
     const logicalRef = `${candidate.prefix} ${refNumber}`;
+    const title = match[3]?.trim() || logicalRef;
+    if (isBodyProseTitle(title)) {
+      return null;
+    }
     return {
       logicalRef,
-      title: match[3]?.trim() || logicalRef,
+      title,
       nodeType: candidate.nodeType,
       level: candidate.level,
     };
@@ -102,4 +106,8 @@ export function detectBuildingCodeHeading(text: string): DetectedBuildingCodeHea
 
 function stripTrailingDot(value: string): string {
   return value.replace(/\.$/, '');
+}
+
+function isBodyProseTitle(title: string): boolean {
+  return /^[a-z][a-z-]*(?:\b|$)/.test(title);
 }
