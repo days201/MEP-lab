@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { adaptDoclingToBuildingCodeIndex } from '../src/main/mcp/building-code/canonical-adapter';
 import { detectBuildingCodeHeading } from '../src/main/mcp/building-code/heading-detector';
+import { buildStructuredTables } from '../src/main/mcp/building-code/table';
 import type { NormalizedDoclingResult } from '../src/main/mcp/building-code/docling-parser';
+import type { CodeNodeRecord, CodeSourceRecord } from '../src/main/mcp/building-code/types';
 import type { KnowledgeBaseDocumentRecord } from '../src/shared/ipc-types';
 
 function documentRecord(): KnowledgeBaseDocumentRecord {
@@ -92,6 +94,45 @@ function parsedDocument(): NormalizedDoclingResult {
       },
     ],
     diagnostics: [],
+  };
+}
+
+function sourceRecord(): CodeSourceRecord {
+  return {
+    sourceId: 'source-1',
+    documentId: 'doc-1',
+    codeFamily: 'NBC',
+    edition: '2025',
+    jurisdictionScope: 'Canada',
+    sourceTitle: 'NBC 2025',
+    sourceUrl: 'kb://building-code/doc-1/NBC.pdf',
+    localSourcePath: '/tmp/NBC.pdf',
+    sourceChecksum: 'sha256:doc',
+  };
+}
+
+function tableNode(overrides: Partial<CodeNodeRecord> = {}): CodeNodeRecord {
+  return {
+    nodeId: 'node-table-9-10-3-3',
+    sourceId: 'source-1',
+    documentId: 'doc-1',
+    nodeType: 'table',
+    logicalRef: 'Table 9.10.3.3',
+    title: 'Door Ratings',
+    text: 'Table 9.10.3.3 Door Ratings',
+    pageRange: '2',
+    headingPath: ['Table 9.10.3.3 Door Ratings'],
+    parentNodeId: null,
+    childNodeIds: [],
+    extractionConfidence: 0.95,
+    parser: {
+      name: 'docling',
+      version: '2.0.0',
+      sourceElementIds: ['caption-heading'],
+      pageRange: '2',
+      boundingBoxes: [],
+    },
+    ...overrides,
   };
 }
 
@@ -291,6 +332,35 @@ describe('building-code canonical adapter', () => {
     expect(unmatchedNode?.tableId).toBe(unmatchedTable?.tableId);
   });
 
+  it('matches structured tables to table nodes by caption logical ref when element ids differ', () => {
+    const nodes = [tableNode()];
+
+    const tables = buildStructuredTables(
+      nodes,
+      [
+        {
+          elementId: 'docling-table-body',
+          caption: 'Table 9.10.3.3 Door Ratings',
+          pageNumber: 2,
+          columns: ['Door', 'Rating'],
+          rows: [['Suite door', '45 min']],
+          notes: [],
+          confidence: 0.94,
+        },
+      ],
+      sourceRecord()
+    );
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0]).toMatchObject({
+      nodeId: nodes[0].nodeId,
+      caption: 'Table 9.10.3.3 Door Ratings',
+      columns: ['Door', 'Rating'],
+    });
+    expect(nodes[0].parser.sourceElementIds).toContain('docling-table-body');
+    expect(nodes[0].tableId).toBe(tables[0].tableId);
+  });
+
   it('uses the parsed Docling parser version for node provenance', () => {
     const index = adaptDoclingToBuildingCodeIndex(
       {
@@ -331,6 +401,49 @@ describe('building-code canonical adapter', () => {
       y: 44,
       width: 240,
       height: 36,
+    });
+  });
+
+  it('preserves the Docling table bbox on caption-created table nodes', () => {
+    const index = adaptDoclingToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        elements: [
+          parsedDocument().elements[0],
+          {
+            elementId: 'captioned-table-body',
+            kind: 'table',
+            text: 'Door | Rating\nSuite door | 45 min',
+            pageNumber: 2,
+            level: null,
+            confidence: 0.94,
+            bbox: { x: 24, y: 88, width: 320, height: 140 },
+          },
+        ],
+        tables: [
+          {
+            elementId: 'captioned-table-body',
+            caption: 'Table 9.10.3.4 Door Ratings',
+            pageNumber: 2,
+            columns: ['Door', 'Rating'],
+            rows: [['Suite door', '45 min']],
+            notes: [],
+            confidence: 0.94,
+          },
+        ],
+      },
+      documentRecord()
+    );
+
+    const tableNode = index.nodes.find((node) => node.logicalRef === 'Table 9.10.3.4');
+
+    expect(tableNode).toMatchObject({ nodeType: 'table' });
+    expect(tableNode?.parser.boundingBoxes).toContainEqual({
+      pageNumber: 2,
+      x: 24,
+      y: 88,
+      width: 320,
+      height: 140,
     });
   });
 

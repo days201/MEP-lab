@@ -1,4 +1,5 @@
 import { buildCitation, stableRecordId } from './hierarchy';
+import { detectBuildingCodeHeading } from './heading-detector';
 import type { NormalizedDoclingTable } from './docling-parser';
 import type { CodeCitation, CodeNodeRecord, CodeSourceRecord, CodeTableRecord } from './types';
 
@@ -52,11 +53,7 @@ export function buildStructuredTables(
   const tables: CodeTableRecord[] = [];
   const matchedNodeIds = new Set<string>();
   for (const doclingTable of doclingTables) {
-    const node = nodes.find(
-      (candidate) =>
-        candidate.nodeType === 'table' &&
-        candidate.parser.sourceElementIds.includes(doclingTable.elementId)
-    );
+    const node = findStructuredTableNode(nodes, doclingTable);
     if (!node) {
       continue;
     }
@@ -67,6 +64,9 @@ export function buildStructuredTables(
       doclingTable.elementId,
     ]);
     node.tableId = tableId;
+    if (!node.parser.sourceElementIds.includes(doclingTable.elementId)) {
+      node.parser.sourceElementIds.push(doclingTable.elementId);
+    }
     matchedNodeIds.add(node.nodeId);
     tables.push({
       tableId,
@@ -100,6 +100,29 @@ export function buildStructuredTables(
     source
   );
   return [...tables, ...unmatchedMarkdownTables];
+}
+
+function findStructuredTableNode(
+  nodes: CodeNodeRecord[],
+  doclingTable: NormalizedDoclingTable
+): CodeNodeRecord | undefined {
+  const sourceElementMatch = nodes.find(
+    (candidate) =>
+      candidate.nodeType === 'table' &&
+      candidate.parser.sourceElementIds.includes(doclingTable.elementId)
+  );
+  if (sourceElementMatch) {
+    return sourceElementMatch;
+  }
+
+  const heading = detectBuildingCodeHeading(doclingTable.caption);
+  if (!heading || heading.nodeType !== 'table') {
+    return undefined;
+  }
+
+  return nodes.find(
+    (candidate) => candidate.nodeType === 'table' && candidate.logicalRef === heading.logicalRef
+  );
 }
 
 function parseTableText(text: string): {

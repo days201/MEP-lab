@@ -3,7 +3,11 @@ import { resolveCrossReferences } from './cross-reference';
 import { detectBuildingCodeHeading } from './heading-detector';
 import { stableNodeId, stableRecordId } from './hierarchy';
 import { buildStructuredTables } from './table';
-import type { NormalizedDoclingResult, NormalizedDoclingTable } from './docling-parser';
+import type {
+  NormalizedDoclingElement,
+  NormalizedDoclingResult,
+  NormalizedDoclingTable,
+} from './docling-parser';
 import type { BuildingCodeIngestionIndex } from './ingest';
 import type { PageText } from './pdf-extract';
 import type { CodeNodeRecord, CodeSourceRecord } from './types';
@@ -116,17 +120,20 @@ function buildNodes(
     expandPageRange(current, element.pageNumber);
   }
 
-  attachTableText(nodes, parsed.tables, source, document, parserVersion);
+  attachTableText(nodes, parsed.tables, parsed.elements, source, document, parserVersion);
   return nodes.map((node) => ({ ...node, text: node.text.trim() }));
 }
 
 function attachTableText(
   nodes: CodeNodeRecord[],
   tables: NormalizedDoclingTable[],
+  elements: NormalizedDoclingElement[],
   source: CodeSourceRecord,
   document: KnowledgeBaseDocumentRecord,
   parserVersion: string
 ): void {
+  const elementsById = new Map(elements.map((element) => [element.elementId, element]));
+
   for (const table of tables) {
     const heading = detectBuildingCodeHeading(table.caption);
     if (!heading || heading.nodeType !== 'table') {
@@ -140,6 +147,7 @@ function attachTableText(
     if (!node.parser.sourceElementIds.includes(table.elementId)) {
       node.parser.sourceElementIds.push(table.elementId);
     }
+    appendTableElementBoundingBox(node, elementsById.get(table.elementId));
     node.extractionConfidence = Math.min(node.extractionConfidence, table.confidence);
     expandPageRange(node, table.pageNumber);
 
@@ -152,6 +160,31 @@ function attachTableText(
     ].join('\n');
     node.text = node.text ? `${node.text}\n${markdown}` : markdown;
   }
+}
+
+function appendTableElementBoundingBox(
+  node: CodeNodeRecord,
+  element: NormalizedDoclingElement | undefined
+): void {
+  if (!element?.bbox) {
+    return;
+  }
+
+  const box = { pageNumber: element.pageNumber, ...element.bbox };
+  if (
+    node.parser.boundingBoxes.some(
+      (candidate) =>
+        candidate.pageNumber === box.pageNumber &&
+        candidate.x === box.x &&
+        candidate.y === box.y &&
+        candidate.width === box.width &&
+        candidate.height === box.height
+    )
+  ) {
+    return;
+  }
+
+  node.parser.boundingBoxes.push(box);
 }
 
 function createTableNodeFromCaption(
