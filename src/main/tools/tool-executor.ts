@@ -178,7 +178,7 @@ export class ToolExecutor {
     let response: Response;
     try {
       response = await fetch(parsed.toString(), {
-        headers: { 'User-Agent': 'open-cowork' },
+        headers: { 'User-Agent': 'mep-lab' },
         signal: AbortSignal.timeout(15000),
       });
     } catch (error) {
@@ -186,7 +186,7 @@ export class ToolExecutor {
         error instanceof Error &&
         (error.name === 'AbortError' || error.name === 'TimeoutError')
       ) {
-        throw new Error('请求超时，请检查网络连接后重试');
+        throw new Error('Request timed out. Check your network connection and try again.');
       }
       throw error;
     }
@@ -225,7 +225,7 @@ export class ToolExecutor {
     let response: Response;
     try {
       response = await fetch(searchUrl.toString(), {
-        headers: { 'User-Agent': 'open-cowork' },
+        headers: { 'User-Agent': 'mep-lab' },
         signal: AbortSignal.timeout(10000),
       });
     } catch (error) {
@@ -233,7 +233,7 @@ export class ToolExecutor {
         error instanceof Error &&
         (error.name === 'AbortError' || error.name === 'TimeoutError')
       ) {
-        throw new Error('请求超时，请检查网络连接后重试');
+        throw new Error('Request timed out. Check your network connection and try again.');
       }
       throw error;
     }

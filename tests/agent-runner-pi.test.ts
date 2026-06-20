@@ -102,13 +102,23 @@ describe('ClaudeAgentRunner Open Cowork SDK integration', () => {
       "import {\n  normalizeMcpToolResultForModel,\n  normalizeToolExecutionResultForUi,\n} from './tool-result-utils'"
     );
     expect(agentRunnerContent).toContain(
-      'const normalizedResult = normalizeMcpToolResultForModel(result);'
+      'const normalizedResult = normalizeMcpToolResultForModel(result, mcpTool.name);'
     );
     expect(agentRunnerContent).toContain(
-      'const normalizedToolResult = normalizeToolExecutionResultForUi(event.result);'
+      'const normalizedToolResult = normalizeToolExecutionResultForUi('
     );
+    expect(agentRunnerContent).toContain('event.toolName');
     expect(agentRunnerContent).not.toContain('else textParts.push(JSON.stringify(part));');
     expect(agentRunnerContent).not.toContain(": JSON.stringify(event.result || '');");
+  });
+
+  it('adds Building_Code citation guidance to the appended prompt', () => {
+    expect(agentRunnerContent).toContain(
+      'Any answer using Building_Code evidence must cite citation.displayCitation inline and include Sources:.'
+    );
+    expect(agentRunnerContent).toContain(
+      'If a Building_Code result says it is unusable, do not paraphrase it.'
+    );
   });
 
   it('persists assistant model metadata for pi-ai thinking replay', () => {

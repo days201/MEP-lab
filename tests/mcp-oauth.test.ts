@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   connectWithOAuthRetry,
   createOAuthCallbackListener,
-  OpenCoworkMcpOAuthProvider,
+  MepLabMcpOAuthProvider,
 } from '../src/main/mcp/mcp-oauth';
 
 describe('createOAuthCallbackListener', () => {
@@ -36,10 +36,10 @@ describe('createOAuthCallbackListener', () => {
   });
 });
 
-describe('OpenCoworkMcpOAuthProvider', () => {
+describe('MepLabMcpOAuthProvider', () => {
   it('updates redirect URIs, keeps tokens, and clears client registration when the port changes', async () => {
     const openExternal = vi.fn();
-    const provider = new OpenCoworkMcpOAuthProvider({ openExternal });
+    const provider = new MepLabMcpOAuthProvider({ openExternal });
 
     provider.setRedirectUrl('http://127.0.0.1:3000/callback');
     provider.saveClientInformation({ client_id: 'client-1' });
@@ -77,7 +77,7 @@ describe('connectWithOAuthRetry', () => {
     let createCount = 0;
     let connectCount = 0;
 
-    const provider = new OpenCoworkMcpOAuthProvider({
+    const provider = new MepLabMcpOAuthProvider({
       openExternal: vi.fn(async () => {
         await fetch(`${String(provider.redirectUrl)}?code=oauth-code`);
       }),

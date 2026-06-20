@@ -1,19 +1,19 @@
 # Default owners for the entire repository
-* @OpenCoworkAI/core
+* @days201/core
 
 # AI execution core
-src/main/claude/ @OpenCoworkAI/core
+src/main/claude/ @days201/core
 
 # MCP server lifecycle
-src/main/mcp/ @OpenCoworkAI/core
+src/main/mcp/ @days201/core
 
 # Sandbox isolation (WSL / Lima)
-src/main/sandbox/ @OpenCoworkAI/core
+src/main/sandbox/ @days201/core
 
 # Frontend
-src/renderer/ @OpenCoworkAI/core
+src/renderer/ @days201/core
 
 # CI/CD and build
-.github/ @OpenCoworkAI/core
-electron-builder.yml @OpenCoworkAI/core
-scripts/ @OpenCoworkAI/core
+.github/ @days201/core
+electron-builder.yml @days201/core
+scripts/ @days201/core

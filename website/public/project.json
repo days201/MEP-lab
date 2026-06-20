@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1.0",
-  "name": "Open Cowork",
-  "organization": "OpenCoworkAI",
-  "canonicalUrl": "https://opencoworkai.github.io/open-cowork/",
+  "name": "MEP Lab",
+  "organization": "days201",
+  "canonicalUrl": "https://days201.github.io/MEP-lab/",
   "localizedUrls": {
-    "en": "https://opencoworkai.github.io/open-cowork/",
-    "zh-CN": "https://opencoworkai.github.io/open-cowork/zh/"
+    "en": "https://days201.github.io/MEP-lab/",
+    "zh-CN": "https://days201.github.io/MEP-lab/zh/"
   },
-  "repository": "https://github.com/OpenCoworkAI/open-cowork",
-  "releases": "https://github.com/OpenCoworkAI/open-cowork/releases",
-  "issues": "https://github.com/OpenCoworkAI/open-cowork/issues",
+  "repository": "https://github.com/days201/MEP-lab",
+  "releases": "https://github.com/days201/MEP-lab/releases",
+  "issues": "https://github.com/days201/MEP-lab/issues",
   "license": {
     "name": "MIT",
-    "url": "https://github.com/OpenCoworkAI/open-cowork/blob/main/LICENSE"
+    "url": "https://github.com/days201/MEP-lab/blob/main/LICENSE"
   },
   "version": "3.3.0",
   "lastReviewed": "2026-05-01",
@@ -29,14 +29,9 @@
   },
   "install": [
     {
-      "platform": "macOS",
-      "method": "Homebrew",
-      "commands": ["brew tap OpenCoworkAI/tap", "brew install --cask --no-quarantine open-cowork"]
-    },
-    {
       "platform": "Windows and macOS",
       "method": "GitHub Releases",
-      "url": "https://github.com/OpenCoworkAI/open-cowork/releases"
+      "url": "https://github.com/days201/MEP-lab/releases"
     }
   ],
   "capabilities": [
@@ -80,21 +75,21 @@
     "localFirst": true,
     "workspaceBoundary": "File operations are restricted to the selected workspace folder.",
     "vmIsolation": ["WSL2 on Windows", "Lima on macOS"],
-    "dataPolicy": "Open Cowork runs locally; the external network path is the AI model API configured by the user. The project website states that Open Cowork does not send data to Open Cowork servers."
+    "dataPolicy": "MEP Lab runs locally; the external network path is the AI model API configured by the user. The project website states that MEP Lab does not send data to MEP Lab servers."
   },
   "machineReadableResources": {
-    "llmsTxt": "https://opencoworkai.github.io/open-cowork/llms.txt",
-    "llmsFullTxt": "https://opencoworkai.github.io/open-cowork/llms-full.txt",
-    "projectJson": "https://opencoworkai.github.io/open-cowork/project.json",
-    "sitemap": "https://opencoworkai.github.io/open-cowork/sitemap.xml",
-    "robots": "https://opencoworkai.github.io/open-cowork/robots.txt"
+    "llmsTxt": "https://days201.github.io/MEP-lab/llms.txt",
+    "llmsFullTxt": "https://days201.github.io/MEP-lab/llms-full.txt",
+    "projectJson": "https://days201.github.io/MEP-lab/project.json",
+    "sitemap": "https://days201.github.io/MEP-lab/sitemap.xml",
+    "robots": "https://days201.github.io/MEP-lab/robots.txt"
   },
   "sourcePages": [
-    "https://github.com/OpenCoworkAI/open-cowork/blob/main/README.md",
-    "https://github.com/OpenCoworkAI/open-cowork/blob/main/README_zh.md",
-    "https://github.com/OpenCoworkAI/open-cowork/blob/main/CHANGELOG.md",
-    "https://github.com/OpenCoworkAI/open-cowork/blob/main/ROADMAP.md",
-    "https://github.com/OpenCoworkAI/open-cowork/blob/main/SECURITY.md",
-    "https://github.com/OpenCoworkAI/open-cowork/blob/main/CONTRIBUTING.md"
+    "https://github.com/days201/MEP-lab/blob/main/README.md",
+    "https://github.com/days201/MEP-lab/blob/main/README_zh.md",
+    "https://github.com/days201/MEP-lab/blob/main/CHANGELOG.md",
+    "https://github.com/days201/MEP-lab/blob/main/ROADMAP.md",
+    "https://github.com/days201/MEP-lab/blob/main/SECURITY.md",
+    "https://github.com/days201/MEP-lab/blob/main/CONTRIBUTING.md"
   ]
 }

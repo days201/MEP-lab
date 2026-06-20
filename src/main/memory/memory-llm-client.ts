@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { AppConfig, CustomProtocolType, ProviderType } from '../config/config-store';
+import type { AppConfig } from '../config/config-store';
 import { configStore } from '../config/config-store';
 import {
   normalizeOpenAICompatibleBaseUrl,
@@ -8,6 +8,10 @@ import {
 } from '../config/auth-utils';
 import { runPiAiOneShot } from '../claude/claude-sdk-one-shot';
 import { logWarn } from '../utils/logger';
+import {
+  resolveMemoryModelRuntimeConfig,
+  type ResolvedMemoryModelConfig,
+} from './memory-runtime-config';
 
 export interface MemoryCompletionRequest {
   systemPrompt: string;
@@ -23,54 +27,6 @@ export interface MemoryCompletionResponse {
 export interface MemoryLLMClientLike {
   complete(request: MemoryCompletionRequest): Promise<MemoryCompletionResponse>;
   embed(text: string): Promise<number[]>;
-}
-
-interface MemoryModelConfig {
-  inheritFromActive?: boolean;
-  provider?: ProviderType;
-  customProtocol?: CustomProtocolType;
-  apiKey?: string;
-  baseUrl?: string;
-  model?: string;
-  timeoutMs?: number;
-}
-
-interface ResolvedMemoryModelConfig {
-  provider: ProviderType;
-  customProtocol?: CustomProtocolType;
-  apiKey: string;
-  baseUrl?: string;
-  model: string;
-  timeoutMs: number;
-}
-
-function normalizeModelConfig(
-  appConfig: AppConfig,
-  input: MemoryModelConfig | undefined,
-  fallbackModel: string
-): ResolvedMemoryModelConfig {
-  const inherit = input?.inheritFromActive !== false;
-  const activeProvider = appConfig.provider;
-  const activeProtocol = appConfig.customProtocol;
-  const activeBaseUrl = appConfig.baseUrl;
-  const activeApiKey = appConfig.apiKey;
-  const activeModel = appConfig.model;
-
-  const provider = inherit ? activeProvider : input?.provider || activeProvider;
-  const customProtocol = inherit ? activeProtocol : input?.customProtocol || activeProtocol;
-  const apiKey = inherit ? activeApiKey : input?.apiKey || '';
-  const baseUrl = inherit ? activeBaseUrl : input?.baseUrl || activeBaseUrl;
-  const model = (input?.model || (inherit ? activeModel : '') || fallbackModel).trim();
-  const timeoutMs = Math.max(5_000, input?.timeoutMs || 180_000);
-
-  return {
-    provider,
-    customProtocol,
-    apiKey,
-    baseUrl,
-    model,
-    timeoutMs,
-  };
 }
 
 function buildAppConfig(base: AppConfig, resolved: ResolvedMemoryModelConfig): AppConfig {
@@ -89,7 +45,7 @@ export class MemoryLLMClient implements MemoryLLMClientLike {
 
   async complete(request: MemoryCompletionRequest): Promise<MemoryCompletionResponse> {
     const appConfig = this.getConfig();
-    const llmConfig = normalizeModelConfig(
+    const llmConfig = resolveMemoryModelRuntimeConfig(
       appConfig,
       appConfig.memoryRuntime?.llm,
       appConfig.model
@@ -136,7 +92,7 @@ export class MemoryLLMClient implements MemoryLLMClientLike {
     if (!appConfig.memoryRuntime?.useEmbedding) {
       return [];
     }
-    const embedConfig = normalizeModelConfig(
+    const embedConfig = resolveMemoryModelRuntimeConfig(
       appConfig,
       appConfig.memoryRuntime.embedding,
       'text-embedding-3-small'

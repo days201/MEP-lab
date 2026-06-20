@@ -3,39 +3,39 @@ layout: home
 head:
   - - link
     - rel: canonical
-      href: https://opencoworkai.github.io/open-cowork/
+      href: https://days201.github.io/MEP-lab/
   - - link
     - rel: alternate
       hreflang: en
-      href: https://opencoworkai.github.io/open-cowork/
+      href: https://days201.github.io/MEP-lab/
   - - link
     - rel: alternate
       hreflang: zh-CN
-      href: https://opencoworkai.github.io/open-cowork/zh/
+      href: https://days201.github.io/MEP-lab/zh/
   - - link
     - rel: alternate
       hreflang: x-default
-      href: https://opencoworkai.github.io/open-cowork/
+      href: https://days201.github.io/MEP-lab/
 
 hero:
-  name: Open Cowork
+  name: MEP Lab
   text: Open-Source AI Agent Desktop App
   tagline: One-click install for Windows & macOS. Multi-model support, VM sandbox isolation, built-in Skills, and MCP integration — no coding required.
   image:
     src: /logo.png
-    alt: Open Cowork Logo
+    alt: MEP Lab Logo
   actions:
     - theme: brand
       text: Download
-      link: https://github.com/OpenCoworkAI/open-cowork/releases
+      link: https://github.com/days201/MEP-lab/releases
     - theme: alt
       text: View on GitHub
-      link: https://github.com/OpenCoworkAI/open-cowork
+      link: https://github.com/days201/MEP-lab
 
 features:
   - icon: 🚀
     title: One-Click Install
-    details: Pre-built installers for Windows (.exe) and macOS (.dmg). Also available via Homebrew. No terminal or coding knowledge required.
+    details: Pre-built installers for Windows (.exe) and macOS (.dmg). No terminal or coding knowledge required.
   - icon: 🤖
     title: Multi-Model Support
     details: Works with Claude, GPT, Gemini, DeepSeek, GLM, MiniMax, Kimi, and any OpenAI-compatible API. Bring your own API key.
@@ -56,7 +56,7 @@ features:
     details: Send commands and receive results via Feishu (Lark) and Slack integration. Automate workflows across collaboration platforms.
   - icon: 🛡️
     title: Free & Open Source
-    details: MIT licensed. Fully transparent codebase. Your data stays local — no telemetry, no data sent to Open Cowork servers.
+    details: MIT licensed. Fully transparent codebase. Your data stays local — no telemetry, no data sent to MEP Lab servers.
 ---
 
 <style>
@@ -123,8 +123,8 @@ features:
 
 |                 | MCP & Skills | Remote Control | GUI Automation |
 | --------------- | :----------: | :------------: | :------------: |
-| Claude Cowork   |      ✓       |       ✗        |       ✗        |
-| **Open Cowork** |    **✓**     |     **✓**      |     **✓**      |
+| MEP Lab   |      ✓       |       ✗        |       ✗        |
+| **MEP Lab** |    **✓**     |     **✓**      |     **✓**      |
 
 </div>
 
@@ -132,14 +132,7 @@ features:
 
 ## Quick Install
 
-**macOS (Homebrew)**
-
-```bash
-brew tap OpenCoworkAI/tap
-brew install --cask --no-quarantine open-cowork
-```
-
-**Windows / macOS** — [Download from Releases →](https://github.com/OpenCoworkAI/open-cowork/releases)
+**Windows / macOS** — [Download from Releases →](https://github.com/days201/MEP-lab/releases)
 
 </div>
 
@@ -149,9 +142,9 @@ brew install --cask --no-quarantine open-cowork
 
 <div class="faq-item">
 
-### What is Open Cowork?
+### What is MEP Lab?
 
-Open Cowork is a free, open-source AI agent desktop application for Windows and macOS. It wraps AI models (Claude, GPT, Gemini, DeepSeek, etc.) into a user-friendly GUI with one-click installation — no terminal or coding knowledge required.
+MEP Lab is a free, open-source AI agent desktop application for Windows and macOS. It wraps AI models (Claude, GPT, Gemini, DeepSeek, etc.) into a user-friendly GUI with one-click installation — no terminal or coding knowledge required.
 
 </div>
 
@@ -167,7 +160,7 @@ Claude (via Anthropic or OpenRouter), OpenAI-compatible APIs, and Chinese models
 
 ### Is it free?
 
-Yes. Open Cowork is completely free and open-source under the MIT license. You only pay for AI model API usage from your chosen provider.
+Yes. MEP Lab is completely free and open-source under the MIT license. You only pay for AI model API usage from your chosen provider.
 
 </div>
 
@@ -175,7 +168,7 @@ Yes. Open Cowork is completely free and open-source under the MIT license. You o
 
 ### How does sandbox isolation work?
 
-Open Cowork uses WSL2 (Windows) or Lima (macOS) to run all AI-executed commands inside an isolated Linux VM. Even if the AI makes a mistake, your host system files remain protected.
+MEP Lab uses WSL2 (Windows) or Lima (macOS) to run all AI-executed commands inside an isolated Linux VM. Even if the AI makes a mistake, your host system files remain protected.
 
 </div>
 
@@ -183,7 +176,7 @@ Open Cowork uses WSL2 (Windows) or Lima (macOS) to run all AI-executed commands 
 
 ### Is my data safe?
 
-Open Cowork runs entirely on your local machine. The only external communication is with the AI model API you configure. No data is sent to Open Cowork servers.
+MEP Lab runs entirely on your local machine. The only external communication is with the AI model API you configure. No data is sent to MEP Lab servers.
 
 </div>
 
@@ -191,7 +184,7 @@ Open Cowork runs entirely on your local machine. The only external communication
 
 ### Does it work on Linux?
 
-Pre-built installers are available for Windows and macOS. Linux users can build from source — see the [GitHub repository](https://github.com/OpenCoworkAI/open-cowork) for instructions.
+Pre-built installers are available for Windows and macOS. Linux users can build from source — see the [GitHub repository](https://github.com/days201/MEP-lab) for instructions.
 
 </div>
 

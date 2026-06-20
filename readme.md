@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="resources/logo.png" alt="Open Cowork Logo" width="280" />
+  <img src="resources/logo.png" alt="MEP Lab Logo" width="280" />
 </p>
 
-<h1 align="center">🚀 Open Cowork: Your Personal AI Agent Desktop App</h1>
+<h1 align="center">🚀 MEP Lab: Your Personal AI Agent Desktop App</h1>
 
 <p align="center">
-  • Open Source Claude Cowork • One-Click Install 
+  • Open Source AI Workspace • One-Click Install
 </p>
 
 <p align="center">
@@ -27,18 +27,18 @@
 
 ---
 
-Open Cowork is a free, open-source AI agent desktop application for Windows and macOS. It wraps Claude Code, OpenAI, Gemini, DeepSeek, and other AI models into a user-friendly GUI with one-click installation — no coding required. Key capabilities include VM-level sandbox isolation (WSL2 on Windows, Lima on macOS), a built-in Skills system for generating PPTX, DOCX, XLSX, and PDF documents, MCP (Model Context Protocol) integration for connecting to browsers, Notion, and other desktop apps, GUI automation via computer use, and remote control through Feishu (Lark) and Slack. Open Cowork is the open-source implementation of Claude Cowork, designed to make AI-powered desktop automation accessible to everyone.
+MEP Lab is a free, open-source AI agent desktop application for Windows and macOS. It wraps Claude Code, OpenAI, Gemini, DeepSeek, and other AI models into a user-friendly GUI with one-click installation — no coding required. Key capabilities include VM-level sandbox isolation (WSL2 on Windows, Lima on macOS), a built-in Skills system for generating PPTX, DOCX, XLSX, and PDF documents, MCP (Model Context Protocol) integration for connecting to browsers, Notion, and other desktop apps, GUI automation via computer use, and remote control through Feishu (Lark) and Slack. MEP Lab is a focused desktop AI workspace for local, tool-capable automation.
 
 ---
 
 ## 📖 Introduction
 
-**Open Cowork** is an open-source implementation of **Claude Cowork**, with one-click installers for **Windows** and **macOS**—no coding required.
+**MEP Lab** is an open-source implementation of **MEP Lab**, with one-click installers for **Windows** and **macOS**—no coding required.
 
 It provides a sandboxed workspace where AI can manage files, generate professional outputs (PPTX, DOCX, XLSX, etc.) through our built-in **Skills** system, and **connect to desktop apps via MCP** (browser, Notion, etc.) for better collaboration.
 
 > [!WARNING]
-> **Disclaimer**: Open Cowork is an AI collaboration tool. Please exercise caution with its operations, especially when authorizing file modifications or deletions. We support VM-based sandbox isolation, but some operations may still carry risks.
+> **Disclaimer**: MEP Lab is an AI collaboration tool. Please exercise caution with its operations, especially when authorizing file modifications or deletions. We support VM-based sandbox isolation, but some operations may still carry risks.
 
 ---
 
@@ -48,9 +48,9 @@ It provides a sandboxed workspace where AI can manage files, generate profession
 
 |               | MCP & Skills | Remote Control | GUI Operation |
 | ------------- | ------------ | -------------- | ------------- |
-| Claude Cowork | ✓            | ✗              | ✗             |
+| Claude Code CLI | ✓            | ✗              | ✗             |
 | OpenClaw      | ✓            | ✓              | ✗             |
-| OpenCowork    | ✓            | ✓              | ✓             |
+| MEP Lab    | ✓            | ✓              | ✓             |
 
 - **One-Click Install, Ready to Use**: Pre-built installers for Windows and macOS, no environment setup needed—just download and start using.
 - **Flexible Model Support**: Supports **Claude**, **OpenAI-compatible APIs**, and Chinese models like **GLM**, **MiniMax**, **Kimi**. Use your OpenRouter, Anthropic, or other API keys with flexible configuration. More models coming soon!
@@ -69,7 +69,7 @@ It provides a sandboxed workspace where AI can manage files, generate profession
 
 ## 🎬 Demo
 
-See Open Cowork in action:
+See MEP Lab in action:
 
 ### 1. Folder Organization & Cleanup 📂
 
@@ -97,31 +97,22 @@ https://github.com/user-attachments/assets/05a703de-c0f5-407b-9a43-18b6a172fd74
 
 ## 📦 Installation
 
-### Option 1: Homebrew (macOS, Recommended)
+### Option 1: Download Installer
 
-```bash
-brew tap OpenCoworkAI/tap
-brew install --cask --no-quarantine open-cowork
-```
-
-> The `--no-quarantine` flag bypasses macOS Gatekeeper, so you won't see the "Apple cannot verify this app" warning.
-
-### Option 2: Download Installer
-
-Get the latest version from our [Releases Page](https://github.com/OpenCoworkAI/open-cowork/releases).
+Get the latest version from our [Releases Page](https://github.com/days201/MEP-lab/releases).
 
 | Platform                  | File Type |
 | ------------------------- | --------- |
 | **Windows**               | `.exe`    |
 | **macOS** (Apple Silicon) | `.dmg`    |
 
-### Option 3: Build from Source
+### Option 2: Build from Source
 
 For developers who want to contribute or modify the codebase:
 
 ```bash
-git clone https://github.com/OpenCoworkAI/open-cowork.git
-cd open-cowork
+git clone https://github.com/days201/MEP-lab.git
+cd mep-lab
 npm install
 npm run rebuild
 npm run dev
@@ -131,7 +122,7 @@ To build the installer locally: `npm run build`
 
 ### Security Configuration: 🔒 Sandbox Support
 
-Open Cowork provides **multi-level sandbox protection** to keep your system safe:
+MEP Lab provides **multi-level sandbox protection** to keep your system safe:
 
 | Level        | Platform | Technology | Description                                    |
 | ------------ | -------- | ---------- | ---------------------------------------------- |
@@ -152,7 +143,7 @@ Open Cowork provides **multi-level sandbox protection** to keep your system safe
 
 ```bash
 brew install lima
-# Open Cowork will automatically create and manage a Lima VM (internal Lima name: 'claude-sandbox')
+# MEP Lab will automatically create and manage a Lima VM (internal Lima name: 'claude-sandbox')
 ```
 
 ---
@@ -188,10 +179,7 @@ You need an API key to power the agent. We support **OpenRouter**, **Anthropic**
 
 ### 📝 Important Notes
 
-1.  **macOS Installation**: If you downloaded the DMG directly (not via Homebrew) and see a security warning, go to **System Settings > Privacy & Security** and click **Open Anyway**. Or install via Homebrew to avoid this entirely:
-    ```bash
-    brew tap OpenCoworkAI/tap && brew install --cask --no-quarantine open-cowork
-    ```
+1.  **macOS Installation**: If you downloaded the DMG directly and see a security warning, go to **System Settings > Privacy & Security** and click **Open Anyway**.
 2.  **Network Access**: For tools like `WebSearch`, you may need to enable "Virtual Network Interface" (TUN Mode) in your proxy settings to ensure connectivity.
 3.  **Notion Connector**: Besides setting the integration token, you also need to add connections in a root page. See https://www.notion.com/help/add-and-manage-connections-with-the-api for more details.
 
@@ -201,7 +189,7 @@ You need an API key to power the agent. We support **OpenRouter**, **Anthropic**
 
 ## 🧰 Skills Library
 
-Open Cowork ships with built-in skills under `.claude/skills/`, and supports user-added or custom skills, including:
+MEP Lab ships with built-in skills under `.claude/skills/`, and supports user-added or custom skills, including:
 
 - `pptx` for PowerPoint generation
 - `docx` for Word document processing
@@ -214,7 +202,7 @@ Open Cowork ships with built-in skills under `.claude/skills/`, and supports use
 ## 🏗️ Architecture
 
 ```
-open-cowork/
+mep-lab/
 ├── src/
 │   ├── main/                    # Electron Main Process (Node.js)
 │   │   ├── index.ts             # Main entry point
@@ -286,35 +274,35 @@ See our full **[ROADMAP.md](ROADMAP.md)** for detailed plans.
 
 ## ❓ FAQ
 
-**What is Open Cowork?**
-Open Cowork is a free, open-source desktop application that provides a local AI agent workspace. It wraps AI models (Claude, GPT, Gemini, DeepSeek, etc.) into a GUI with one-click installers for Windows and macOS — no terminal or coding knowledge required.
+**What is MEP Lab?**
+MEP Lab is a free, open-source desktop application that provides a local AI agent workspace. It wraps AI models (Claude, GPT, Gemini, DeepSeek, etc.) into a GUI with one-click installers for Windows and macOS — no terminal or coding knowledge required.
 
-**How is Open Cowork different from Claude Cowork?**
-Open Cowork is the open-source implementation of Claude Cowork. It adds multi-model support (not just Claude), GUI automation via computer use, remote control through Feishu/Slack, and VM-level sandbox isolation. See the [feature comparison table](#features) for details.
+**What can MEP Lab do?**
+MEP Lab combines multi-model support, GUI automation via computer use, remote control through Feishu/Slack, and VM-level sandbox isolation in one local desktop workspace. See the [feature comparison table](#features) for details.
 
-**What AI models does Open Cowork support?**
+**What AI models does MEP Lab support?**
 Claude (via Anthropic or OpenRouter), OpenAI-compatible APIs, and Chinese models including GLM (Zhipu AI), MiniMax, and Kimi. Any provider offering an OpenAI-compatible API endpoint can be configured.
 
-**Is Open Cowork free?**
-Yes. Open Cowork itself is completely free and open-source under the MIT license. You only need to pay for the AI model API usage from your chosen provider.
+**Is MEP Lab free?**
+Yes. MEP Lab itself is completely free and open-source under the MIT license. You only need to pay for the AI model API usage from your chosen provider.
 
-**Does Open Cowork work on Linux?**
-Currently, Open Cowork provides pre-built installers for Windows and macOS only. Linux users can build from source — see the [Build from Source](#installation) section.
+**Does MEP Lab work on Linux?**
+Currently, MEP Lab provides pre-built installers for Windows and macOS only. Linux users can build from source — see the [Build from Source](#installation) section.
 
 **How does sandbox isolation work?**
-Open Cowork offers multi-level protection: basic path-based restrictions on all platforms, and enhanced VM-level isolation using WSL2 (Windows) or Lima (macOS). When a VM is available, all commands execute inside an isolated Linux environment, protecting your host system.
+MEP Lab offers multi-level protection: basic path-based restrictions on all platforms, and enhanced VM-level isolation using WSL2 (Windows) or Lima (macOS). When a VM is available, all commands execute inside an isolated Linux environment, protecting your host system.
 
 **What are Skills and how do I create custom ones?**
-Skills are built-in workflows for specific tasks like generating PPTX, DOCX, PDF, or XLSX files. Open Cowork ships with default skills under `.claude/skills/` and includes a `skill-creator` tool to help you build your own custom skills.
+Skills are built-in workflows for specific tasks like generating PPTX, DOCX, PDF, or XLSX files. MEP Lab ships with default skills under `.claude/skills/` and includes a `skill-creator` tool to help you build your own custom skills.
 
 **What is MCP and how does it work?**
-MCP (Model Context Protocol) lets AI connect to external tools and services. Open Cowork supports MCP connectors for browsers, Notion, and other desktop apps — extending the AI's capabilities beyond just file management and code.
+MCP (Model Context Protocol) lets AI connect to external tools and services. MEP Lab supports MCP connectors for browsers, Notion, and other desktop apps — extending the AI's capabilities beyond just file management and code.
 
 **How do I set up remote control via Feishu or Slack?**
-Open Cowork supports remote control through Feishu (Lark) and Slack integration, allowing you to send commands and receive results from collaboration platforms. Check the app settings for remote control configuration.
+MEP Lab supports remote control through Feishu (Lark) and Slack integration, allowing you to send commands and receive results from collaboration platforms. Check the app settings for remote control configuration.
 
-**Is my data safe? Does Open Cowork send data to external servers?**
-Open Cowork runs locally on your machine. Your files stay in your workspace. The only external communication is with the AI model API you configure (e.g., Anthropic, OpenRouter). No data is sent to Open Cowork servers.
+**Is my data safe? Does MEP Lab send data to external servers?**
+MEP Lab runs locally on your machine. Your files stay in your workspace. The only external communication is with the AI model API you configure (e.g., Anthropic, OpenRouter). No data is sent to MEP Lab servers.
 
 ---
 
@@ -343,10 +331,10 @@ Join our community for support and discussion:
 
 ## 📄 License
 
-MIT © Open Cowork Team
+MIT © MEP Lab Team
 
 ---
 
 <p align="center">
-  Made with ❤️ by the Open Cowork Team with the help of opus4.5
+  Made with ❤️ by the MEP Lab Team with the help of opus4.5
 </p>

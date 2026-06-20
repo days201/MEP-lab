@@ -250,7 +250,7 @@ export function SettingsMemory() {
         memoryRuntime: runtimeDraft,
       });
       await refreshOverview();
-      setStatus(t('memory.runtimeSaved', '记忆运行时配置已保存'));
+      setStatus(t('memory.runtimeSaved', 'Memory runtime settings saved'));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
@@ -279,7 +279,7 @@ export function SettingsMemory() {
   };
 
   const handleRebuildAll = async () => {
-    if (!window.confirm(t('memory.rebuildAllConfirm', '这会清空并重建全部记忆，是否继续？'))) {
+    if (!window.confirm(t('memory.rebuildAllConfirm', 'This will clear and rebuild all memory. Continue?'))) {
       return;
     }
     setIsBusy(true);
@@ -289,7 +289,7 @@ export function SettingsMemory() {
       await Promise.all([refreshOverview(), refreshFiles()]);
       setStatus(
         t('memory.rebuildAllSuccess', {
-          defaultValue: `已重建全部记忆：${result.sessionCount} 个会话，${result.workspaceCount} 个来源工作区`,
+          defaultValue: `Rebuilt all memory: ${result.sessionCount} sessions, ${result.workspaceCount} source workspaces`,
           sessionCount: result.sessionCount,
           workspaceCount: result.workspaceCount,
         })
@@ -398,12 +398,12 @@ export function SettingsMemory() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <InfoCard
-              label={t('memory.storageRoot', '存储根目录')}
+              label={t('memory.storageRoot', 'Storage root')}
               value={overview?.storageRoot || runtimeDraft.storageRoot || 'Default userData/memory'}
             />
             <InfoCard
-              label={t('memory.currentWorkspace', '当前工作区')}
-              value={currentWorkspace || t('memory.noWorkspace', '暂无工作区')}
+              label={t('memory.currentWorkspace', 'Current workspace')}
+              value={currentWorkspace || t('memory.noWorkspace', 'No workspace')}
               secondary={
                 overview?.topSourceWorkspaces?.length
                   ? `Top sources: ${overview.topSourceWorkspaces
@@ -418,15 +418,15 @@ export function SettingsMemory() {
       </SettingsContentSection>
 
       <SettingsContentSection
-        title={t('memory.runtimeTitle', '运行时配置')}
+        title={t('memory.runtimeTitle', 'Runtime settings')}
         description={t(
           'memory.runtimeDescription',
-          '默认继承当前激活的 API 配置。这里主要调节导航深度、embedding 和落盘目录。'
+          'Defaults inherit the currently active API configuration. This section mainly controls navigation depth, embeddings, and storage location.'
         )}
       >
         <div className="space-y-4 rounded-xl border border-border-muted bg-background-secondary/60 p-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <LabeledField label={t('memory.storageRoot', '存储根目录')}>
+            <LabeledField label={t('memory.storageRoot', 'Storage root')}>
               <input
                 value={runtimeDraft.storageRoot || ''}
                 onChange={(event) =>
@@ -436,7 +436,7 @@ export function SettingsMemory() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
               />
             </LabeledField>
-            <LabeledField label={t('memory.maxNavSteps', '导航步数')}>
+            <LabeledField label={t('memory.maxNavSteps', 'Navigation steps')}>
               <input
                 type="number"
                 min={0}
@@ -451,7 +451,7 @@ export function SettingsMemory() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
               />
             </LabeledField>
-            <LabeledField label={t('memory.ingestionConcurrency', '重建并发度')}>
+            <LabeledField label={t('memory.ingestionConcurrency', 'Rebuild concurrency')}>
               <input
                 type="number"
                 min={1}
@@ -467,7 +467,7 @@ export function SettingsMemory() {
               />
             </LabeledField>
             <ToggleField
-              label={t('memory.useEmbedding', '启用 embedding 检索')}
+              label={t('memory.useEmbedding', 'Enable embedding retrieval')}
               checked={runtimeDraft.useEmbedding}
               onChange={(checked) =>
                 setRuntimeDraft((prev) => ({
@@ -477,7 +477,7 @@ export function SettingsMemory() {
               }
             />
             <ToggleField
-              label={t('memory.evalEnabled', '启用真实模型评测')}
+              label={t('memory.evalEnabled', 'Enable real model evaluation')}
               checked={runtimeDraft.evalEnabled ?? false}
               onChange={(checked) =>
                 setRuntimeDraft((prev) => ({
@@ -488,7 +488,7 @@ export function SettingsMemory() {
             />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <LabeledField label={t('memory.evalArtifactsRoot', '评测产物目录')}>
+            <LabeledField label={t('memory.evalArtifactsRoot', 'Evaluation artifacts directory')}>
               <input
                 value={runtimeDraft.evalArtifactsRoot || ''}
                 onChange={(event) =>
@@ -497,7 +497,7 @@ export function SettingsMemory() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
               />
             </LabeledField>
-            <LabeledField label={t('memory.evalMaxRounds', '评测轮数')}>
+            <LabeledField label={t('memory.evalMaxRounds', 'Evaluation rounds')}>
               <input
                 type="number"
                 min={1}
@@ -512,7 +512,7 @@ export function SettingsMemory() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
               />
             </LabeledField>
-            <LabeledField label={t('memory.promptIterationRounds', 'Prompt 迭代轮数')}>
+            <LabeledField label={t('memory.promptIterationRounds', 'Prompt iteration rounds')}>
               <input
                 type="number"
                 min={0}
@@ -534,7 +534,7 @@ export function SettingsMemory() {
                 {t('memory.llmConfig', 'Memory LLM')}
               </p>
               <ToggleField
-                label={t('memory.inheritActive', '继承当前激活 API')}
+                label={t('memory.inheritActive', 'Inherit active API')}
                 checked={runtimeDraft.llm.inheritFromActive}
                 onChange={(checked) =>
                   setRuntimeDraft((prev) => ({
@@ -543,7 +543,7 @@ export function SettingsMemory() {
                   }))
                 }
               />
-              <LabeledField label={t('memory.modelOverride', '模型覆盖')}>
+              <LabeledField label={t('memory.modelOverride', 'Model override')}>
                 <input
                   value={runtimeDraft.llm.model || ''}
                   onChange={(event) =>
@@ -556,7 +556,7 @@ export function SettingsMemory() {
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
                 />
               </LabeledField>
-              <LabeledField label={t('memory.baseUrlOverride', 'Base URL 覆盖')}>
+              <LabeledField label={t('memory.baseUrlOverride', 'Base URL override')}>
                 <input
                   value={runtimeDraft.llm.baseUrl || ''}
                   onChange={(event) =>
@@ -569,7 +569,7 @@ export function SettingsMemory() {
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
                 />
               </LabeledField>
-              <LabeledField label={t('memory.apiKeyOverride', 'API Key 覆盖')}>
+              <LabeledField label={t('memory.apiKeyOverride', 'API key override')}>
                 <input
                   type="password"
                   value={runtimeDraft.llm.apiKey || ''}
@@ -588,7 +588,7 @@ export function SettingsMemory() {
                 {t('memory.embeddingConfig', 'Embedding')}
               </p>
               <ToggleField
-                label={t('memory.inheritActive', '继承当前激活 API')}
+                label={t('memory.inheritActive', 'Inherit active API')}
                 checked={runtimeDraft.embedding.inheritFromActive}
                 onChange={(checked) =>
                   setRuntimeDraft((prev) => ({
@@ -597,7 +597,7 @@ export function SettingsMemory() {
                   }))
                 }
               />
-              <LabeledField label={t('memory.modelOverride', '模型覆盖')}>
+              <LabeledField label={t('memory.modelOverride', 'Model override')}>
                 <input
                   value={runtimeDraft.embedding.model || ''}
                   onChange={(event) =>
@@ -609,7 +609,7 @@ export function SettingsMemory() {
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
                 />
               </LabeledField>
-              <LabeledField label={t('memory.baseUrlOverride', 'Base URL 覆盖')}>
+              <LabeledField label={t('memory.baseUrlOverride', 'Base URL override')}>
                 <input
                   value={runtimeDraft.embedding.baseUrl || ''}
                   onChange={(event) =>
@@ -621,7 +621,7 @@ export function SettingsMemory() {
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
                 />
               </LabeledField>
-              <LabeledField label={t('memory.apiKeyOverride', 'API Key 覆盖')}>
+              <LabeledField label={t('memory.apiKeyOverride', 'API key override')}>
                 <input
                   type="password"
                   value={runtimeDraft.embedding.apiKey || ''}
@@ -644,7 +644,7 @@ export function SettingsMemory() {
               disabled={isBusy}
               className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {t('memory.saveRuntime', '保存运行时配置')}
+              {t('memory.saveRuntime', 'Save runtime settings')}
             </button>
           </div>
         </div>
@@ -676,7 +676,7 @@ export function SettingsMemory() {
               onChange={(event) => setSourceWorkspaceFilter(event.target.value)}
               className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none"
             >
-              <option value="">{t('memory.allSources', '全部来源')}</option>
+              <option value="">{t('memory.allSources', 'All sources')}</option>
               {overview?.topSourceWorkspaces?.map((item) => (
                 <option key={item.workspaceKey} value={item.workspaceKey}>
                   {item.workspaceKey}
@@ -722,7 +722,7 @@ export function SettingsMemory() {
                 emptyLabel={t('memory.noResults')}
               />
               <ResultGroup
-                title={t('memory.groupRawSessions', '原始会话')}
+                title={t('memory.groupRawSessions', 'Raw sessions')}
                 items={groupedResults.raw}
                 selectedId={selected?.id || null}
                 onSelect={handleSelectResult}
@@ -743,7 +743,7 @@ export function SettingsMemory() {
                     <p className="text-sm text-text-secondary whitespace-pre-wrap">{selected.summary}</p>
                     {selected.sourceFile && (
                       <p className="text-xs text-text-muted">
-                        {t('memory.sourceFile', '来源文件')}: {selected.sourceFile}
+                        {t('memory.sourceFile', 'Source file')}: {selected.sourceFile}
                       </p>
                     )}
                     {selected.sessionId && (
@@ -753,7 +753,7 @@ export function SettingsMemory() {
                         }}
                         className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-text-primary"
                       >
-                        {t('memory.inspectSession', '查看该会话的完整记忆')}
+                        {t('memory.inspectSession', 'Inspect full memory for this session')}
                       </button>
                     )}
                     {selected.details && (
@@ -780,7 +780,7 @@ export function SettingsMemory() {
               <div className="rounded-xl border border-border-muted bg-background/80 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-text-primary">
-                    {t('memory.inspectSession', '查看会话记忆')}
+                    {t('memory.inspectSession', 'Inspect session memory')}
                   </p>
                   {inspectedSession?.filePath && (
                     <button
@@ -789,7 +789,7 @@ export function SettingsMemory() {
                       }}
                       className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-text-primary"
                     >
-                      {t('memory.revealInFinder', '在 Finder 中显示')}
+                      {t('memory.revealInFinder', 'Reveal in Finder')}
                     </button>
                   )}
                 </div>
@@ -797,7 +797,7 @@ export function SettingsMemory() {
                   <div className="mt-3 space-y-3">
                     <div className="rounded-lg border border-border-muted bg-background-secondary/60 p-3">
                       <p className="text-xs text-text-muted">
-                        {inspectedSession.sourceWorkspace || t('memory.noWorkspace', '暂无工作区')}
+                        {inspectedSession.sourceWorkspace || t('memory.noWorkspace', 'No workspace')}
                       </p>
                       <p className="mt-1 text-sm font-medium text-text-primary">
                         {inspectedSession.session.summary}
@@ -825,7 +825,7 @@ export function SettingsMemory() {
                   </div>
                 ) : (
                   <p className="mt-3 text-sm text-text-muted">
-                    {t('memory.inspectSessionHint', '从上方搜索结果中选择一个 session 或 chunk 后查看')}
+                    {t('memory.inspectSessionHint', 'Select a session or chunk from the search results above to inspect it')}
                   </p>
                 )}
               </div>
@@ -835,17 +835,17 @@ export function SettingsMemory() {
       </SettingsContentSection>
 
       <SettingsContentSection
-        title={t('memory.filesTitle', '原始文件查看')}
+        title={t('memory.filesTitle', 'Raw file viewer')}
         description={t(
           'memory.filesDescription',
-          '直接查看实际落盘的 core / unified experience / session_state / eval artifacts。'
+          'Directly inspect the persisted core, unified experience, session_state, and eval artifact files.'
         )}
       >
         <div className="grid gap-4 rounded-xl border border-border-muted bg-background-secondary/60 p-4 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                {t('memory.fileList', '文件列表')}
+                {t('memory.fileList', 'File list')}
               </p>
               <button
                 onClick={() => {
@@ -853,7 +853,7 @@ export function SettingsMemory() {
                 }}
                 className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-text-primary"
               >
-                {t('memory.refreshFiles', '刷新')}
+                {t('memory.refreshFiles', 'Refresh')}
               </button>
             </div>
             {files.length > 0 ? (
@@ -880,7 +880,7 @@ export function SettingsMemory() {
               ))
             ) : (
               <div className="rounded-lg border border-dashed border-border-muted bg-background/50 p-3 text-sm text-text-muted">
-                {t('memory.noFiles', '还没有记忆文件')}
+                {t('memory.noFiles', 'No memory files yet')}
               </div>
             )}
           </div>
@@ -889,7 +889,7 @@ export function SettingsMemory() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-text-primary">
-                  {t('memory.fileContent', '文件内容')}
+                  {t('memory.fileContent', 'File content')}
                 </p>
                 {fileContent?.filePath && (
                   <p className="mt-1 text-xs text-text-muted">{fileContent.filePath}</p>
@@ -902,7 +902,7 @@ export function SettingsMemory() {
                   }}
                   className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-text-primary"
                 >
-                  {t('memory.revealInFinder', '在 Finder 中显示')}
+                  {t('memory.revealInFinder', 'Reveal in Finder')}
                 </button>
               )}
             </div>
@@ -910,11 +910,11 @@ export function SettingsMemory() {
               <pre className="mt-3 max-h-[34rem] overflow-auto rounded-lg bg-background-secondary/80 p-3 text-xs leading-5 text-text-secondary whitespace-pre-wrap">
                 {fileContent.parsed
                   ? JSON.stringify(fileContent.parsed, null, 2)
-                  : fileContent.text || t('memory.emptyFile', '文件为空')}
+                  : fileContent.text || t('memory.emptyFile', 'File is empty')}
               </pre>
             ) : (
               <p className="mt-3 text-sm text-text-muted">
-                {t('memory.selectFileHint', '选择左侧文件后即可查看原始 JSON')}
+                {t('memory.selectFileHint', 'Select a file on the left to view its raw JSON')}
               </p>
             )}
           </div>
@@ -942,7 +942,7 @@ export function SettingsMemory() {
             disabled={isBusy}
             className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {t('memory.rebuildAll', '重建全部记忆')}
+            {t('memory.rebuildAll', 'Rebuild all memory')}
           </button>
           <button
             onClick={() => {

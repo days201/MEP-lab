@@ -27,6 +27,11 @@ const servers = [
     description: 'GUI Automation MCP Server',
   },
   {
+    name: 'building-code-server',
+    entry: 'building-code-server.ts',
+    description: 'Building Code MCP Server',
+  },
+  {
     name: 'software-dev-server-example',
     entry: 'software-dev-server-example.ts',
     description: 'Software Development MCP Server',

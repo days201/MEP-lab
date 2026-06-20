@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Prepare a bundled Python runtime for Open Cowork (macOS/Linux).
+ * Prepare a bundled Python runtime for MEP Lab (macOS/Linux).
  *
  * Goal:
  * - Bundle a standalone python3 into `resources/python/darwin-{arch}/`
@@ -104,7 +104,7 @@ function download(url, dest) {
       url,
       {
         headers: {
-          'User-Agent': 'open-cowork-build-script',
+          'User-Agent': 'mep-lab-build-script',
           Accept: '*/*',
         },
       },
@@ -146,7 +146,7 @@ function fetchJson(url) {
       url,
       {
         headers: {
-          'User-Agent': 'open-cowork-build-script',
+          'User-Agent': 'mep-lab-build-script',
           Accept: 'application/vnd.github+json',
         },
       },

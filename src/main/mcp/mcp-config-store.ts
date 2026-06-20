@@ -4,6 +4,13 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 import path from 'path';
 import type { MCPServerConfig } from './mcp-manager';
+import { configStore, type AppConfig } from '../config/config-store';
+import {
+  normalizeOpenAICompatibleBaseUrl,
+  resolveOllamaCredentials,
+  resolveOpenAICredentials,
+} from '../config/auth-utils';
+import { resolveMemoryModelRuntimeConfig } from '../memory/memory-runtime-config';
 import { log, logError } from '../utils/logger';
 
 /**
@@ -56,7 +63,105 @@ export const MCP_SERVER_PRESETS: Record<string, Omit<MCPServerConfig, 'id' | 'en
       // No environment variables required
     },
   },
+  'building-code': {
+    name: 'Building_Code',
+    type: 'stdio',
+    command: 'node',
+    args: ['{BUILDING_CODE_SERVER_PATH}'],
+    env: {
+      BUILDING_CODE_INDEX_DIR: '',
+      BUILDING_CODE_EMBEDDING_MODEL: '',
+      BUILDING_CODE_EMBEDDING_BASE_URL: '',
+      BUILDING_CODE_EMBEDDING_API_KEY: '',
+      BUILDING_CODE_EMBEDDING_TIMEOUT_MS: '',
+    },
+    requiresEnv: [],
+    envDescription: {
+      BUILDING_CODE_INDEX_DIR: 'Directory containing imported building-code index files',
+      BUILDING_CODE_EMBEDDING_MODEL: 'Optional override; inherits Memory embedding model by default',
+      BUILDING_CODE_EMBEDDING_BASE_URL:
+        'Optional override; inherits Memory OpenAI-compatible embedding base URL by default',
+      BUILDING_CODE_EMBEDDING_API_KEY:
+        'Optional override; inherits Memory OpenAI-compatible embedding API key by default',
+      BUILDING_CODE_EMBEDDING_TIMEOUT_MS:
+        'Optional override; inherits Memory embedding timeout by default',
+    },
+  },
 };
+
+function hasEnvValue(env: Record<string, string>, key: string): boolean {
+  return typeof env[key] === 'string' && env[key].trim().length > 0;
+}
+
+function withFallbackEnv(
+  env: Record<string, string>,
+  key: string,
+  value: string | undefined
+): void {
+  if (!hasEnvValue(env, key) && value?.trim()) {
+    env[key] = value.trim();
+  }
+}
+
+export function resolveBuildingCodeRuntimeEnv(
+  env: Record<string, string> = {},
+  appConfig: AppConfig = configStore.getAll()
+): Record<string, string> {
+  const resolved = resolveMemoryModelRuntimeConfig(
+    appConfig,
+    appConfig.memoryRuntime?.embedding,
+    'text-embedding-3-small'
+  );
+  const provider = resolved.provider;
+  const protocol = resolved.customProtocol;
+  const isOpenAICompatible =
+    provider === 'openai' ||
+    provider === 'openrouter' ||
+    provider === 'ollama' ||
+    (provider === 'custom' && protocol === 'openai');
+  const nextEnv = { ...env };
+
+  if (!isOpenAICompatible) {
+    return nextEnv;
+  }
+
+  const credentials =
+    provider === 'ollama'
+      ? resolveOllamaCredentials({
+          provider,
+          customProtocol: protocol,
+          apiKey: resolved.apiKey,
+          baseUrl: resolved.baseUrl,
+        })
+      : resolveOpenAICredentials({
+          provider,
+          customProtocol: protocol,
+          apiKey: resolved.apiKey,
+          baseUrl: resolved.baseUrl,
+        });
+
+  withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_API_KEY', credentials?.apiKey);
+  withFallbackEnv(
+    nextEnv,
+    'BUILDING_CODE_EMBEDDING_BASE_URL',
+    credentials?.baseUrl || normalizeOpenAICompatibleBaseUrl(resolved.baseUrl)
+  );
+  withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_MODEL', resolved.model);
+  withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_TIMEOUT_MS', String(resolved.timeoutMs));
+
+  return nextEnv;
+}
+
+export function resolveMcpServerRuntimeConfig(config: MCPServerConfig): MCPServerConfig {
+  if (config.name !== 'Building_Code') {
+    return config;
+  }
+
+  return {
+    ...config,
+    env: resolveBuildingCodeRuntimeEnv(config.env || {}),
+  };
+}
 
 /**
  * MCP Server Configuration Store
@@ -127,7 +232,9 @@ class MCPConfigStore {
    * Get enabled servers only
    */
   getEnabledServers(): MCPServerConfig[] {
-    return this.getServers().filter((s) => s.enabled);
+    return this.getServers()
+      .filter((s) => s.enabled)
+      .map((server) => resolveMcpServerRuntimeConfig(server));
   }
 
   /**
@@ -160,9 +267,7 @@ class MCPConfigStore {
       }
     }
 
-    // Development: __dirname is dist-electron/main
-    // Need to go up 2 levels to get to project root (dist-electron/main -> dist-electron -> project root)
-    const projectRoot = path.join(__dirname, '..', '..');
+    const projectRoot = this.getProjectRoot();
 
     // Prefer bundled JS from dist-mcp in development.
     // This avoids attempting to run TypeScript directly with `node`.
@@ -211,6 +316,32 @@ class MCPConfigStore {
   }
 
   /**
+   * Get the path to the Building Code MCP server file
+   */
+  private getBuildingCodeServerPath(): string | null {
+    return this.getMcpServerPath('building-code-server.ts');
+  }
+
+  private getProjectRoot(): string {
+    const candidates = [
+      path.join(__dirname, '..', '..'),
+      path.join(__dirname, '..', '..', '..'),
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(path.join(candidate, 'package.json'))) {
+          return candidate;
+        }
+      } catch {
+        // Try the next candidate.
+      }
+    }
+
+    return path.join(__dirname, '..', '..');
+  }
+
+  /**
    * Create a server config from a preset
    */
   createFromPreset(presetKey: string, enabled: boolean = false): MCPServerConfig | null {
@@ -233,6 +364,10 @@ class MCPConfigStore {
           // GUI Operate server path
           if (arg === '{GUI_OPERATE_SERVER_PATH}') {
             return this.getGuiOperateServerPath() || arg;
+          }
+          // Building Code server path
+          if (arg === '{BUILDING_CODE_SERVER_PATH}') {
+            return this.getBuildingCodeServerPath() || arg;
           }
           return arg;
         }),

@@ -371,7 +371,7 @@ export class MessageRouter {
       channelId: originalMessage.channelId,
       content: {
         type: 'text',
-        text: `✅ 工作目录已切换到: ${newCwd}`,
+        text: `✅ Working directory changed to: ${newCwd}`,
       },
       replyTo: originalMessage.id,
     };
@@ -401,7 +401,7 @@ export class MessageRouter {
           // For now, add as text description
           blocks.push({
             type: 'text',
-            text: `[用户发送了一张图片: ${message.content.imageUrl}]`,
+            text: `[User sent an image: ${message.content.imageUrl}]`,
           } as TextContent);
         }
         break;
@@ -410,7 +410,7 @@ export class MessageRouter {
         if (message.content.file) {
           blocks.push({
             type: 'text',
-            text: `[用户发送了文件: ${message.content.file.name}]`,
+            text: `[User sent a file: ${message.content.file.name}]`,
           } as TextContent);
         }
         break;
@@ -419,14 +419,14 @@ export class MessageRouter {
         // TODO: Transcribe voice message
         blocks.push({
           type: 'text',
-          text: '[用户发送了语音消息]',
+          text: '[User sent a voice message]',
         } as TextContent);
         break;
         
       default:
         blocks.push({
           type: 'text',
-          text: message.content.text || '[不支持的消息类型]',
+          text: message.content.text || '[Unsupported message type]',
         } as TextContent);
     }
     
@@ -463,10 +463,10 @@ export class MessageRouter {
         return { prompt: '', cwd };
       }
       
-      return { prompt: text || '你好', cwd };
+      return { prompt: text || 'Hello', cwd };
     }
     
-    return { prompt: '请处理上述内容', cwd };
+    return { prompt: 'Please handle the content above', cwd };
   }
   
   /**

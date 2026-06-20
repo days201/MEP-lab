@@ -29,16 +29,24 @@ describe('bundle-mcp staging', () => {
 
     fs.writeFileSync(path.join(sourceDir, 'gui-operate-server.js'), 'module.exports = "gui";\n');
     fs.writeFileSync(
+      path.join(sourceDir, 'building-code-server.js'),
+      'module.exports = "building-code";\n'
+    );
+    fs.writeFileSync(
       path.join(sourceDir, 'software-dev-server-example.js'),
       'module.exports = "dev";\n'
     );
 
     await stageBundledServers(sourceDir, stagedDir, [
       { name: 'gui-operate-server' },
+      { name: 'building-code-server' },
       { name: 'software-dev-server-example' },
     ]);
 
     expect(fs.readFileSync(path.join(stagedDir, 'gui-operate-server.js'), 'utf8')).toContain('gui');
+    expect(fs.readFileSync(path.join(stagedDir, 'building-code-server.js'), 'utf8')).toContain(
+      'building-code'
+    );
     expect(
       fs.readFileSync(path.join(stagedDir, 'software-dev-server-example.js'), 'utf8')
     ).toContain('dev');
@@ -57,5 +65,12 @@ describe('bundle-mcp staging', () => {
 
     expect(builderConfig).toContain('.bundle-resources/mcp');
     expect(builderConfig).not.toContain('- from: dist-mcp');
+  });
+
+  it('bundles the building-code MCP server from the default server list', () => {
+    const bundleScript = fs.readFileSync(path.resolve(process.cwd(), 'scripts/bundle-mcp.js'), 'utf8');
+
+    expect(bundleScript).toContain("name: 'building-code-server'");
+    expect(bundleScript).toContain("entry: 'building-code-server.ts'");
   });
 });

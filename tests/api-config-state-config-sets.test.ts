@@ -21,7 +21,7 @@ describe('api config set helpers', () => {
       configSets: [
         {
           id: 'default',
-          name: '\u9ED8\u8BA4\u65B9\u6848',
+          name: 'Default Profile',
           isSystem: true,
           provider: 'openrouter',
           customProtocol: 'anthropic',
@@ -123,7 +123,7 @@ describe('api config set helpers', () => {
       configSets: [
         {
           id: 'default',
-          name: '默认方案',
+          name: 'Default Profile',
           isSystem: true,
           provider: 'openrouter',
           customProtocol: 'anthropic',

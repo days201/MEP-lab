@@ -33,7 +33,7 @@ User-agent: anthropic-ai
 Allow: /
 
 # AI-readable context:
-# https://opencoworkai.github.io/open-cowork/llms.txt
-# https://opencoworkai.github.io/open-cowork/llms-full.txt
-# https://opencoworkai.github.io/open-cowork/project.json
-Sitemap: https://opencoworkai.github.io/open-cowork/sitemap.xml
+# https://days201.github.io/MEP-lab/llms.txt
+# https://days201.github.io/MEP-lab/llms-full.txt
+# https://days201.github.io/MEP-lab/project.json
+Sitemap: https://days201.github.io/MEP-lab/sitemap.xml
