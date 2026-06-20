@@ -16,11 +16,12 @@ describe('building-code canonical adapter', () => {
       ['Appendix A Explanatory Material', 'Appendix A', 'Explanatory Material', 'appendix', 1],
       ['Note A-3.2.1. Fire-resistance ratings', 'Note A-3.2.1', 'Fire-resistance ratings', 'note', 4],
       ['9.10.3.1 Fire separations', 'Section 9.10.3.1', 'Fire separations', 'section', 4],
+      ['Section 3.4.1 Means of Egress', 'Section 3.4.1', 'Means of Egress', 'section', 2],
     ])('detects %s', (text, logicalRef, title, nodeType, level) => {
       expect(detectBuildingCodeHeading(text)).toMatchObject({ logicalRef, title, nodeType, level });
     });
 
-    it('detects all-caps chapter headings without inventing a logical ref', () => {
+    it('detects all-caps part headings without inventing a logical ref', () => {
       expect(detectBuildingCodeHeading('PART 3 FIRE PROTECTION')).toMatchObject({
         logicalRef: 'Part 3',
         title: 'FIRE PROTECTION',
@@ -38,6 +39,7 @@ describe('building-code canonical adapter', () => {
       'Article 3.2.2.20. requires sprinklers in this condition.',
       'Part 6 applies to HVAC systems.',
       '9.10.3.1 applies to fire separations.',
+      'Section 9.10.3.1 and Section 9.10.3.2 apply to fire separations.',
     ])('ignores body prose that starts with a reference: %s', (text) => {
       expect(detectBuildingCodeHeading(text)).toBeNull();
     });

@@ -113,25 +113,18 @@ function stripTrailingDot(value: string): string {
 }
 
 function isBodyProseTitle(title: string): boolean {
-  const proseLeadingWords = new Set([
-    'applies',
-    'apply',
-    'requires',
-    'require',
-    'shall',
-    'must',
-    'may',
-    'is',
-    'are',
-    'means',
-    'includes',
-    'does',
-    'do',
-  ]);
-  const firstWord = title.match(/^[A-Za-z]+/)?.[0].toLowerCase();
-  if (!firstWord || !proseLeadingWords.has(firstWord)) {
-    return false;
+  const trimmed = title.trim();
+  const continuationReference = /^(?:and|or)\s+(?:Section|Subsection|Article|Sentence|Part|Chapter|Table|Figure|Appendix|Note)\b/i;
+  if (continuationReference.test(trimmed)) {
+    return true;
   }
 
-  return /[.!?]$/.test(title) || title.trim().split(/\s+/).length >= 3;
+  const bodyProsePhrases = [
+    /^(?:applies?|requires?)\b.+[.!?]$/i,
+    /^(?:shall|must|may)\b.+[.!?]$/i,
+    /^(?:is|are)\b.+[.!?]$/i,
+    /^(?:includes?|does|do)\b.+[.!?]$/i,
+  ];
+
+  return bodyProsePhrases.some((pattern) => pattern.test(trimmed));
 }
