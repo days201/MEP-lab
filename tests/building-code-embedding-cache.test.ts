@@ -76,7 +76,7 @@ describe('building-code embedding cache', () => {
     });
   });
 
-  it('builds deterministic cache keys from model and text', () => {
+  it('builds deterministic cache keys from source checksum, node id, text, and model', () => {
     expect(
       buildEmbeddingCacheKey({
         model: 'text-embedding-3-small',
@@ -181,6 +181,34 @@ describe('building-code embedding cache', () => {
 
     await expect(embedMissingChunks(index, partialClient)).rejects.toThrow(
       `Embedding client returned ${returnedCount} embeddings for ${expectedCount} chunks`
+    );
+    expect(index.vectors).toEqual(originalVectors);
+  });
+
+  it('rejects empty embedding vectors without appending corrupt vectors', async () => {
+    const index = fixtureIndex();
+    const originalVectors = [...index.vectors];
+    const emptyVectorClient = {
+      model: 'text-embedding-3-small',
+      embed: async (texts: string[]) => texts.map(() => []),
+    };
+
+    await expect(embedMissingChunks(index, emptyVectorClient)).rejects.toThrow(
+      'Embedding client returned an invalid embedding at index 0'
+    );
+    expect(index.vectors).toEqual(originalVectors);
+  });
+
+  it('rejects ragged embedding dimensions without appending corrupt vectors', async () => {
+    const index = fixtureIndex();
+    const originalVectors = [...index.vectors];
+    const raggedClient = {
+      model: 'text-embedding-3-small',
+      embed: async (texts: string[]) => texts.map((_, index) => (index === 0 ? [1, 0] : [1])),
+    };
+
+    await expect(embedMissingChunks(index, raggedClient)).rejects.toThrow(
+      'Embedding client returned inconsistent embedding dimensions at index 1'
     );
     expect(index.vectors).toEqual(originalVectors);
   });

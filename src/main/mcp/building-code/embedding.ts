@@ -134,12 +134,24 @@ function validateEmbeddingBatch(embeddings: number[][], expectedLength: number):
     throw new Error(`Embedding client returned ${embeddings.length} embeddings for ${expectedLength} chunks`);
   }
 
-  const invalidIndex = embeddings.findIndex(
-    (embedding) => !Array.isArray(embedding) || embedding.some((value) => !Number.isFinite(value))
-  );
+  let expectedDimension: number | undefined;
 
-  if (invalidIndex !== -1) {
-    throw new Error(`Embedding client returned an invalid embedding at index ${invalidIndex}`);
+  for (let index = 0; index < embeddings.length; index++) {
+    const embedding = embeddings[index];
+
+    if (
+      !Array.isArray(embedding) ||
+      embedding.length === 0 ||
+      embedding.some((value) => !Number.isFinite(value))
+    ) {
+      throw new Error(`Embedding client returned an invalid embedding at index ${index}`);
+    }
+
+    expectedDimension ??= embedding.length;
+
+    if (embedding.length !== expectedDimension) {
+      throw new Error(`Embedding client returned inconsistent embedding dimensions at index ${index}`);
+    }
   }
 }
 
