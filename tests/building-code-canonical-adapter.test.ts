@@ -4,6 +4,7 @@ import {
   adaptParserDocumentToBuildingCodeIndex,
 } from '../src/main/mcp/building-code/canonical-adapter';
 import { detectBuildingCodeHeading } from '../src/main/mcp/building-code/heading-detector';
+import { ingestParsedBuildingCodeDocument } from '../src/main/mcp/building-code/ingest';
 import { buildStructuredTables } from '../src/main/mcp/building-code/table';
 import type { NormalizedDoclingResult } from '../src/main/mcp/building-code/docling-parser';
 import type { NormalizedParserDocument } from '../src/main/mcp/building-code/parser-adapter';
@@ -236,6 +237,51 @@ describe('building-code canonical adapter', () => {
       })
     );
     expect(index.chunks.length).toBeGreaterThan(0);
+  });
+
+  it('ingests legacy Docling parsed payloads without parser-neutral page diagnostics', () => {
+    const legacyParsed = {
+      parserName: 'docling',
+      parserVersion: '2.0.0',
+      pages: [{ pageNumber: 1, text: 'Section 9.10.3.1 Fire separations\nBody text.' }],
+      elements: [
+        {
+          elementId: 'h1',
+          kind: 'heading',
+          text: 'Section 9.10.3.1 Fire separations',
+          pageNumber: 1,
+          level: 2,
+          confidence: 0.99,
+          bbox: null,
+        },
+        {
+          elementId: 'p1',
+          kind: 'text',
+          text: 'Body text.',
+          pageNumber: 1,
+          level: null,
+          confidence: 0.99,
+          bbox: null,
+        },
+      ],
+      tables: [],
+      diagnostics: [],
+    };
+
+    const index = ingestParsedBuildingCodeDocument(
+      legacyParsed as unknown as NormalizedParserDocument,
+      documentRecord()
+    );
+
+    expect(index.nodes).toHaveLength(1);
+    expect(index.nodes[0]).toMatchObject({
+      logicalRef: 'Section 9.10.3.1',
+      parser: {
+        name: 'docling',
+        version: '2.0.0',
+        sourceElementIds: ['h1', 'p1'],
+      },
+    });
   });
 
   it('associates structured tables to caption-derived table nodes instead of the current section', () => {
@@ -472,6 +518,58 @@ describe('building-code canonical adapter', () => {
 
     expect(index.nodes.map((node) => node.parser.name)).toEqual(['liteparse']);
     expect(index.nodes.map((node) => node.parser.version)).toEqual(['2.0.0-liteparse']);
+    expect(index.nodes[0].parser.sourceElementIds).toEqual(['text-item-1', 'text-item-2']);
+  });
+
+  it('uses LiteParse table sourceIds when creating table provenance', () => {
+    const parsed: NormalizedParserDocument = {
+      parserName: 'liteparse',
+      parserVersion: '2.0.0-liteparse',
+      pages: [
+        {
+          pageNumber: 1,
+          text: 'Section 9.10.3.1 Fire separations\nTable 9.10.3.1 Ratings',
+          extractionMode: 'native',
+          boundingBoxes: [],
+        },
+      ],
+      elements: [
+        {
+          elementId: 'lp-heading-1',
+          kind: 'heading',
+          text: 'Section 9.10.3.1 Fire separations',
+          pageNumber: 1,
+          level: 2,
+          confidence: 0.99,
+          bbox: null,
+          sourceIds: ['text-item-heading'],
+        },
+      ],
+      tables: [
+        {
+          elementId: 'lp-table-1',
+          caption: 'Table 9.10.3.1 Ratings',
+          pageNumber: 1,
+          columns: ['Type', 'Rating'],
+          rows: [['Wall', '1 h']],
+          notes: [],
+          confidence: 0.94,
+          sourceIds: ['table-cell-1', 'table-cell-2'],
+        },
+      ],
+      diagnostics: [],
+      pageDiagnostics: [],
+    };
+
+    const index = adaptParserDocumentToBuildingCodeIndex(parsed, documentRecord());
+
+    expect(index.nodes.find((node) => node.logicalRef === 'Table 9.10.3.1')).toMatchObject({
+      parser: {
+        name: 'liteparse',
+        version: '2.0.0-liteparse',
+        sourceElementIds: ['table-cell-1', 'table-cell-2'],
+      },
+    });
   });
 
   it('preserves bounding boxes from content elements attached to the current node', () => {

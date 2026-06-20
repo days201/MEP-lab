@@ -58,7 +58,7 @@ export function adaptParserDocumentToBuildingCodeIndex(
     crossReferences,
     diagnostics: [
       ...parsed.diagnostics,
-      ...parsed.pageDiagnostics
+      ...(parsed.pageDiagnostics ?? [])
         .filter((diagnostic) => diagnostic.severity !== 'info')
         .map((diagnostic) => `Page ${diagnostic.pageNumber}: ${diagnostic.message}`),
     ],
@@ -106,7 +106,7 @@ function buildNodes(
         parser: {
           name: parserName,
           version: parserVersion,
-          sourceElementIds: [element.elementId],
+          sourceElementIds: sourceIdsFor(element),
           pageRange: String(element.pageNumber),
           boundingBoxes: element.bbox ? [{ pageNumber: element.pageNumber, ...element.bbox }] : [],
         },
@@ -124,7 +124,7 @@ function buildNodes(
       continue;
     }
     current.text = current.text ? `${current.text}\n${element.text}` : element.text;
-    current.parser.sourceElementIds.push(element.elementId);
+    appendSourceElementIds(current, sourceIdsFor(element));
     if (element.bbox) {
       current.parser.boundingBoxes.push({ pageNumber: element.pageNumber, ...element.bbox });
     }
@@ -160,9 +160,7 @@ function attachTableText(
       ) ??
       createTableNodeFromCaption(nodes, table, heading, source, document, parserName, parserVersion);
 
-    if (!node.parser.sourceElementIds.includes(table.elementId)) {
-      node.parser.sourceElementIds.push(table.elementId);
-    }
+    appendSourceElementIds(node, sourceIdsFor(table));
     appendTableElementBoundingBox(node, elementsById.get(table.elementId));
     node.extractionConfidence = Math.min(node.extractionConfidence, table.confidence);
     expandPageRange(node, table.pageNumber);
@@ -229,7 +227,7 @@ function createTableNodeFromCaption(
     parser: {
       name: parserName,
       version: parserVersion,
-      sourceElementIds: [table.elementId],
+      sourceElementIds: sourceIdsFor(table),
       pageRange: String(table.pageNumber),
       boundingBoxes: [],
     },
@@ -265,6 +263,28 @@ function expandPageRange(node: CodeNodeRecord, pageNumber: number): void {
     node.pageRange = `${start}-${pageNumber}`;
     node.parser.pageRange = node.pageRange;
   }
+}
+
+function appendSourceElementIds(
+  node: CodeNodeRecord,
+  sourceElementIds: string[]
+): void {
+  for (const sourceElementId of sourceElementIds) {
+    if (!node.parser.sourceElementIds.includes(sourceElementId)) {
+      node.parser.sourceElementIds.push(sourceElementId);
+    }
+  }
+}
+
+function sourceIdsFor(value: {
+  elementId: string;
+  sourceIds?: string[];
+}): string[] {
+  const sourceIds = Array.isArray(value.sourceIds) && value.sourceIds.length > 0
+    ? value.sourceIds
+    : [value.elementId];
+
+  return [...new Set(sourceIds)];
 }
 
 function displayHeading(node: CodeNodeRecord): string {

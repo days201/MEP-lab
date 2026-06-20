@@ -64,8 +64,10 @@ export function buildStructuredTables(
       doclingTable.elementId,
     ]);
     node.tableId = tableId;
-    if (!node.parser.sourceElementIds.includes(doclingTable.elementId)) {
-      node.parser.sourceElementIds.push(doclingTable.elementId);
+    for (const sourceElementId of sourceIdsFor(doclingTable)) {
+      if (!node.parser.sourceElementIds.includes(sourceElementId)) {
+        node.parser.sourceElementIds.push(sourceElementId);
+      }
     }
     matchedNodeIds.add(node.nodeId);
     tables.push({
@@ -123,6 +125,13 @@ function findStructuredTableNode(
   return nodes.find(
     (candidate) => candidate.nodeType === 'table' && candidate.logicalRef === heading.logicalRef
   );
+}
+
+function sourceIdsFor(table: NormalizedDoclingTable): string[] {
+  const sourceIds = Array.isArray(table.sourceIds) && table.sourceIds.length > 0
+    ? table.sourceIds
+    : [table.elementId];
+  return [...new Set(sourceIds)];
 }
 
 function parseTableText(text: string): {
