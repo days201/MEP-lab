@@ -780,3 +780,11 @@ export interface MCPToolInfo {
   serverId: string;
   serverName: string;
 }
+
+export type {
+  KnowledgeBaseOverview,
+  KnowledgeBaseDocumentRecord,
+  KnowledgeBaseDiagnostic,
+  KnowledgeBaseGraphSummary,
+  KnowledgeBaseIndexSummary,
+} from '../../shared/ipc-types';

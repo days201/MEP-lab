@@ -24,6 +24,10 @@ import { PluginCatalogService } from './skills/plugin-catalog-service';
 import { PluginRuntimeService } from './skills/plugin-runtime-service';
 import { MemoryService } from './memory/memory-service';
 import { MemoryExtension } from './memory/memory-extension';
+import {
+  KnowledgeBaseService,
+  type KnowledgeBaseServiceOptions,
+} from './mcp/building-code/knowledge-base-service';
 import { AgentRuntimeExtensionManager } from './extensions/agent-runtime-extension-manager';
 import {
   configStore,
@@ -115,6 +119,7 @@ let sessionManager: SessionManager | null = null;
 let skillsManager: SkillsManager | null = null;
 let pluginRuntimeService: PluginRuntimeService | null = null;
 let memoryService: MemoryService | null = null;
+let knowledgeBaseService: KnowledgeBaseService | null = null;
 let scheduledTaskManager: ScheduledTaskManager | null = null;
 
 function sanitizeDiagnosticBaseUrl(value: string | undefined): string | null {
@@ -172,6 +177,24 @@ async function waitForDevServer(url: string, maxAttempts = 30, intervalMs = 500)
 
   logWarn(`[App] Dev server did not become ready within timeout: ${url}`);
   return false;
+}
+
+function resolveDoclingPythonPath(): string {
+  const configured = process.env.DOCLING_PYTHON_PATH?.trim();
+  if (configured) {
+    return configured;
+  }
+  const platform = process.platform;
+  const executable = platform === 'win32' ? 'python.exe' : 'python3';
+  const candidate = app.isPackaged
+    ? join(process.resourcesPath, 'python', platform === 'win32' ? executable : join('bin', executable))
+    : join(
+        __dirname,
+        '../../resources/python',
+        `${platform}-${process.arch}`,
+        platform === 'win32' ? executable : join('bin', executable)
+      );
+  return fs.existsSync(candidate) ? candidate : platform === 'win32' ? 'python' : 'python3';
 }
 
 // Single-instance lock: skip in dev mode so vite-plugin-electron can restart freely
@@ -836,6 +859,11 @@ app
 
     pluginRuntimeService = new PluginRuntimeService(new PluginCatalogService());
     memoryService = new MemoryService(db);
+    const knowledgeBaseOptions: KnowledgeBaseServiceOptions = {
+      userDataPath: app.getPath('userData'),
+      pythonPath: resolveDoclingPythonPath(),
+    };
+    knowledgeBaseService = new KnowledgeBaseService(knowledgeBaseOptions);
     const extensionManager = new AgentRuntimeExtensionManager([new MemoryExtension(memoryService)]);
 
     // Initialize session manager before creating an interactive window.
@@ -1387,6 +1415,23 @@ ipcMain.handle('dialog.selectFiles', async () => {
   }
 
   return result.filePaths;
+});
+
+ipcMain.handle('knowledgeBase.selectDocuments', async () => {
+  const options: Electron.OpenDialogOptions = {
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      {
+        name: 'Building-code documents',
+        extensions: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'txt', 'md', 'csv'],
+      },
+    ],
+  };
+  const owner = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+  const result = owner
+    ? await dialog.showOpenDialog(owner, options)
+    : await dialog.showOpenDialog(options);
+  return result.canceled ? [] : result.filePaths;
 });
 
 // Config IPC handlers
@@ -2498,6 +2543,56 @@ ipcMain.handle('memory.getOverview', (_event, cwd?: string) => {
     throw new Error('Memory service not initialized');
   }
   return memoryService.getOverview(cwd);
+});
+
+ipcMain.handle('knowledgeBase.getOverview', async () => {
+  if (!knowledgeBaseService) throw new Error('Knowledge Base service not initialized');
+  return knowledgeBaseService.getOverview();
+});
+
+function assertKnowledgeBaseFilePaths(filePaths: unknown): string[] {
+  if (!Array.isArray(filePaths)) {
+    throw new Error('Knowledge Base upload requires an array of file paths');
+  }
+  if (!filePaths.every((filePath) => typeof filePath === 'string' && filePath.trim())) {
+    throw new Error('Knowledge Base upload file paths must be non-empty strings');
+  }
+  return filePaths;
+}
+
+function assertKnowledgeBaseDocumentId(documentId: unknown): string {
+  if (typeof documentId !== 'string' || !documentId.trim()) {
+    throw new Error('Knowledge Base document id must be a non-empty string');
+  }
+  return documentId;
+}
+
+ipcMain.handle('knowledgeBase.uploadDocuments', async (_event, filePaths: unknown) => {
+  if (!knowledgeBaseService) throw new Error('Knowledge Base service not initialized');
+  const validFilePaths = assertKnowledgeBaseFilePaths(filePaths);
+  return knowledgeBaseService.uploadDocuments(validFilePaths);
+});
+
+ipcMain.handle('knowledgeBase.reparseDocument', async (_event, documentId: unknown) => {
+  if (!knowledgeBaseService) throw new Error('Knowledge Base service not initialized');
+  const validDocumentId = assertKnowledgeBaseDocumentId(documentId);
+  return knowledgeBaseService.reparseDocument(validDocumentId);
+});
+
+ipcMain.handle('knowledgeBase.removeDocument', async (_event, documentId: unknown) => {
+  if (!knowledgeBaseService) throw new Error('Knowledge Base service not initialized');
+  const validDocumentId = assertKnowledgeBaseDocumentId(documentId);
+  return knowledgeBaseService.removeDocument(validDocumentId);
+});
+
+ipcMain.handle('knowledgeBase.revealSource', async (_event, documentId: unknown) => {
+  if (!knowledgeBaseService) throw new Error('Knowledge Base service not initialized');
+  const validDocumentId = assertKnowledgeBaseDocumentId(documentId);
+  const overview = await knowledgeBaseService.getOverview();
+  const document = overview.documents.find((item) => item.documentId === validDocumentId);
+  if (!document) return { success: false, error: 'Knowledge-base document not found' };
+  shell.showItemInFolder(document.sourcePath);
+  return { success: true };
 });
 
 ipcMain.handle(

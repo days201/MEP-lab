@@ -43,6 +43,7 @@ interface RebuildIndexResult {
 
 export interface KnowledgeBaseServiceOptions {
   userDataPath: string;
+  pythonPath?: string;
   now?: () => string;
   randomId?: () => string;
   parseDocument?: ParseDocument;
@@ -55,6 +56,7 @@ export class KnowledgeBaseService {
   private readonly registry: DocumentRegistry;
   private readonly now: () => string;
   private readonly randomId: () => string;
+  private readonly pythonPath: string;
   private readonly parseDocument: ParseDocument;
   private readonly embeddingClientFactory: EmbeddingClientFactory;
   private readonly saveIndex: SaveIndex;
@@ -64,12 +66,13 @@ export class KnowledgeBaseService {
     this.registry = new DocumentRegistry(this.paths.registryPath);
     this.now = options.now ?? (() => new Date().toISOString());
     this.randomId = options.randomId ?? randomUUID;
+    this.pythonPath = options.pythonPath ?? 'python';
     this.parseDocument =
       options.parseDocument ??
       ((filePath) =>
         parseDocumentWithDocling({
           filePath,
-          pythonPath: process.env.DOCLING_PYTHON_PATH || process.env.PYTHON || 'python',
+          pythonPath: this.pythonPath,
         }));
     this.embeddingClientFactory = options.embeddingClientFactory ?? createOpenAIEmbeddingClient;
     this.saveIndex = options.saveIndex ?? saveBuildingCodeIndex;
