@@ -1,13 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { KnowledgeBaseService } from '../src/main/mcp/building-code/knowledge-base-service';
 import type { NormalizedDoclingResult } from '../src/main/mcp/building-code/docling-parser';
 import { saveBuildingCodeIndex } from '../src/main/mcp/building-code/index-store';
 import type { BuildingCodeIndex } from '../src/main/mcp/building-code/index-store';
 
 const roots: string[] = [];
+let originalBuildingCodeIndexDir: string | undefined;
 
 function parsed(): NormalizedDoclingResult {
   return {
@@ -88,7 +89,12 @@ function activeIndexSnapshot(userData: string): {
 }
 
 describe('KnowledgeBaseService', () => {
+  beforeEach(() => {
+    originalBuildingCodeIndexDir = process.env.BUILDING_CODE_INDEX_DIR;
+  });
+
   afterEach(() => {
+    restoreEnv('BUILDING_CODE_INDEX_DIR', originalBuildingCodeIndexDir);
     for (const root of roots.splice(0)) {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -491,4 +497,91 @@ describe('KnowledgeBaseService', () => {
       parseCompletedAt: '2026-06-19T12:02:00.000Z',
     });
   });
+
+  it('uploads through the service and serves exact MCP reads from the active snapshot', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
+    roots.push(userData);
+    const source = path.join(userData, 'input.md');
+    fs.writeFileSync(source, 'Section 9.10.3.1 Fire separations\nBody text.');
+    const service = new KnowledgeBaseService({
+      userDataPath: userData,
+      now: () => '2026-06-19T12:00:00.000Z',
+      randomId: () => 'doc-1',
+      parseDocument: async () => parsed(),
+      embeddingClientFactory: () => ({
+        model: 'text-embedding-3-small',
+        embed: async (texts) => texts.map(() => [1, 0, 0]),
+      }),
+    });
+    await service.uploadDocuments([source]);
+    process.env.BUILDING_CODE_INDEX_DIR = service.getIndexDir();
+
+    const { handleBuildingCodeTool } = await import('../src/main/mcp/building-code-server');
+    const result = await handleBuildingCodeTool('read_section', { ref: 'Section 9.10.3.1' });
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({
+      excerpt: 'Body text.',
+      fullText: 'Body text.',
+      citation: {
+        logicalRef: 'Section 9.10.3.1',
+        sourceUrl: 'kb://building-code/doc-1/input.md',
+        displayCitation: 'NBC unknown, Section 9.10.3.1',
+      },
+    });
+    const textResult = JSON.parse(result.content[0]?.text ?? '{}') as typeof result;
+    expect(textResult.results).toHaveLength(result.results.length);
+    expect(textResult.results[0]).toMatchObject({
+      excerpt: result.results[0]?.excerpt,
+      fullText: result.results[0]?.fullText,
+      citation: {
+        sourceUrl: result.results[0]?.citation.sourceUrl,
+      },
+    });
+  });
+
+  it('retains the prior active index when a rebuild candidate fails canonicalization', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
+    roots.push(userData);
+    const source = path.join(userData, 'input.md');
+    fs.writeFileSync(source, 'Section 9.10.3.1 Fire separations\nBody text.');
+    let noHeadings = false;
+    const service = new KnowledgeBaseService({
+      userDataPath: userData,
+      now: () => '2026-06-19T12:00:00.000Z',
+      randomId: () => (noHeadings ? 'doc-2' : 'doc-1'),
+      parseDocument: async () => (noHeadings ? parsedWithoutCanonicalHeadings() : parsed()),
+      embeddingClientFactory: () => ({
+        model: 'text-embedding-3-small',
+        embed: async (texts) => texts.map(() => [1, 0, 0]),
+      }),
+    });
+
+    await service.uploadDocuments([source]);
+    const before = await service.getOverview();
+    const beforeIndex = activeIndexSnapshot(userData);
+    noHeadings = true;
+    const secondSource = path.join(userData, 'second.md');
+    fs.writeFileSync(secondSource, 'Plain prose only.');
+    const after = await service.uploadDocuments([secondSource]);
+    const afterIndex = activeIndexSnapshot(userData);
+
+    expect(after.documents.find((document) => document.documentId === 'doc-2')).toMatchObject({
+      status: 'failed',
+      failureMessage: 'no canonical building-code sections found',
+    });
+    expect(after.summary).toEqual(before.summary);
+    expect(afterIndex.index.nodes).toEqual(beforeIndex.index.nodes);
+    expect(afterIndex.index.semanticSearchAvailable).toBe(beforeIndex.index.semanticSearchAvailable);
+    expect(afterIndex.vectors.vectors).toEqual(beforeIndex.vectors.vectors);
+  });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+
+  process.env[key] = value;
+}

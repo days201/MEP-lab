@@ -6,6 +6,7 @@ import { handleBuildingCodeTool, listBuildingCodeTools } from '../src/main/mcp/b
 import { saveBuildingCodeIndex, type BuildingCodeIndex } from '../src/main/mcp/building-code/index-store';
 
 const roots: string[] = [];
+let originalBuildingCodeIndexDir: string | undefined;
 let originalBuildingCodeEmbeddingApiKey: string | undefined;
 let originalOpenAiApiKey: string | undefined;
 
@@ -60,12 +61,13 @@ function index(): BuildingCodeIndex {
 
 describe('production Building_Code MCP behavior', () => {
   beforeEach(() => {
+    originalBuildingCodeIndexDir = process.env.BUILDING_CODE_INDEX_DIR;
     originalBuildingCodeEmbeddingApiKey = process.env.BUILDING_CODE_EMBEDDING_API_KEY;
     originalOpenAiApiKey = process.env.OPENAI_API_KEY;
   });
 
   afterEach(() => {
-    delete process.env.BUILDING_CODE_INDEX_DIR;
+    restoreEnv('BUILDING_CODE_INDEX_DIR', originalBuildingCodeIndexDir);
     restoreEnv('BUILDING_CODE_EMBEDDING_API_KEY', originalBuildingCodeEmbeddingApiKey);
     restoreEnv('OPENAI_API_KEY', originalOpenAiApiKey);
     for (const root of roots.splice(0)) {
