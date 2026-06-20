@@ -1,8 +1,11 @@
 import { buildNodeChunks } from './chunking';
+import { adaptDoclingToBuildingCodeIndex } from './canonical-adapter';
 import { resolveCrossReferences } from './cross-reference';
 import { buildHierarchyFromPageTexts, checksumText } from './hierarchy';
 import { pageTextsFromMarkdownFixture, type PageText } from './pdf-extract';
 import { extractMarkdownTables } from './table';
+import type { NormalizedDoclingResult } from './docling-parser';
+import type { KnowledgeBaseDocumentRecord } from '../../../shared/ipc-types';
 import type {
   CodeChunkRecord,
   CodeCrossReferenceRecord,
@@ -52,4 +55,11 @@ export function ingestMarkdownFixture(
     crossReferences,
     diagnostics: [],
   };
+}
+
+export function ingestParsedBuildingCodeDocument(
+  parsed: NormalizedDoclingResult,
+  document: KnowledgeBaseDocumentRecord
+): BuildingCodeIngestionIndex {
+  return adaptDoclingToBuildingCodeIndex(parsed, document);
 }

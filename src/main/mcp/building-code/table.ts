@@ -1,4 +1,5 @@
 import { buildCitation, stableRecordId } from './hierarchy';
+import type { NormalizedDoclingTable } from './docling-parser';
 import type { CodeCitation, CodeNodeRecord, CodeSourceRecord, CodeTableRecord } from './types';
 
 export function extractMarkdownTables(
@@ -41,6 +42,56 @@ export function extractMarkdownTables(
         })),
       };
     });
+}
+
+export function buildStructuredTables(
+  nodes: CodeNodeRecord[],
+  doclingTables: NormalizedDoclingTable[],
+  source: CodeSourceRecord
+): CodeTableRecord[] {
+  const tables: CodeTableRecord[] = [];
+  for (const doclingTable of doclingTables) {
+    const node = nodes.find((candidate) =>
+      candidate.parser.sourceElementIds.includes(doclingTable.elementId)
+    );
+    if (!node) {
+      continue;
+    }
+    const citation = buildCitation(source, node);
+    const tableId = stableRecordId('table', [
+      source.sourceChecksum,
+      node.nodeId,
+      doclingTable.elementId,
+    ]);
+    node.tableId = tableId;
+    tables.push({
+      tableId,
+      nodeId: node.nodeId,
+      caption: doclingTable.caption,
+      columns: doclingTable.columns,
+      rows: doclingTable.rows.map((cells, index) => ({
+        rowId: stableRecordId('table-row', [
+          source.sourceChecksum,
+          node.nodeId,
+          String(index),
+          cells.join('|'),
+        ]),
+        cells,
+        citation: citationForTablePart(citation, 'table-row', String(index), cells.join('|')),
+      })),
+      notes: doclingTable.notes.map((text, index) => ({
+        noteId: stableRecordId('table-note', [
+          source.sourceChecksum,
+          node.nodeId,
+          String(index),
+          text,
+        ]),
+        text,
+        citation: citationForTablePart(citation, 'table-note', String(index), text),
+      })),
+    });
+  }
+  return tables.length > 0 ? tables : extractMarkdownTables(nodes, source);
 }
 
 function parseTableText(text: string): {
