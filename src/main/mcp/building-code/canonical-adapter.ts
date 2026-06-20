@@ -106,6 +106,12 @@ function buildNodes(
     }
     current.text = current.text ? `${current.text}\n${element.text}` : element.text;
     current.parser.sourceElementIds.push(element.elementId);
+    if (element.bbox) {
+      current.parser.boundingBoxes.push({ pageNumber: element.pageNumber, ...element.bbox });
+    }
+    if (Number.isFinite(element.confidence)) {
+      current.extractionConfidence = Math.min(current.extractionConfidence, element.confidence);
+    }
     expandPageRange(current, element.pageNumber);
   }
 

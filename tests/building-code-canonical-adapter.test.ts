@@ -166,6 +166,50 @@ describe('building-code canonical adapter', () => {
     expect(index.chunks.length).toBeGreaterThan(0);
   });
 
+  it('preserves bounding boxes from content elements attached to the current node', () => {
+    const index = adaptDoclingToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        elements: [
+          ...parsedDocument().elements.slice(0, 1),
+          {
+            ...parsedDocument().elements[1],
+            bbox: { x: 12, y: 44, width: 240, height: 36 },
+          },
+        ],
+        tables: [],
+      },
+      documentRecord()
+    );
+
+    expect(index.nodes[0].parser.boundingBoxes).toContainEqual({
+      pageNumber: 1,
+      x: 12,
+      y: 44,
+      width: 240,
+      height: 36,
+    });
+  });
+
+  it('reflects the lowest confidence from content elements attached to the current node', () => {
+    const index = adaptDoclingToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        elements: [
+          ...parsedDocument().elements.slice(0, 1),
+          {
+            ...parsedDocument().elements[1],
+            confidence: 0.72,
+          },
+        ],
+        tables: [],
+      },
+      documentRecord()
+    );
+
+    expect(index.nodes[0].extractionConfidence).toBe(0.72);
+  });
+
   it('fails documents with no canonical building-code headings', () => {
     expect(() =>
       adaptDoclingToBuildingCodeIndex(
