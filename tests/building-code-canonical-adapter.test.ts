@@ -166,6 +166,149 @@ describe('building-code canonical adapter', () => {
     expect(index.chunks.length).toBeGreaterThan(0);
   });
 
+  it('associates structured tables to caption-derived table nodes instead of the current section', () => {
+    const index = adaptDoclingToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        elements: [
+          parsedDocument().elements[0],
+          {
+            elementId: 'body-table',
+            kind: 'table',
+            text: 'Type | Rating\nWall | 1 h',
+            pageNumber: 2,
+            level: null,
+            confidence: 0.94,
+            bbox: { x: 20, y: 80, width: 300, height: 120 },
+          },
+        ],
+        tables: [
+          {
+            elementId: 'body-table',
+            caption: 'Table 9.10.3.2 Occupancy Ratings',
+            pageNumber: 2,
+            columns: ['Type', 'Rating'],
+            rows: [['Wall', '1 h']],
+            notes: ['Note 1: Applies to major occupancies.'],
+            confidence: 0.94,
+          },
+        ],
+      },
+      documentRecord()
+    );
+
+    const sectionNode = index.nodes.find((node) => node.logicalRef === 'Section 9.10.3.1');
+    const tableNode = index.nodes.find((node) => node.logicalRef === 'Table 9.10.3.2');
+    const table = index.tables.find((record) => record.caption === 'Table 9.10.3.2 Occupancy Ratings');
+
+    expect(sectionNode).toMatchObject({ nodeType: 'section' });
+    expect(sectionNode).not.toHaveProperty('tableId');
+    expect(tableNode).toMatchObject({
+      nodeType: 'table',
+      parser: {
+        version: '2.0.0',
+        sourceElementIds: expect.arrayContaining(['body-table']),
+      },
+    });
+    expect(table).toMatchObject({
+      nodeId: tableNode?.nodeId,
+      columns: ['Type', 'Rating'],
+    });
+    expect(tableNode?.tableId).toBe(table?.tableId);
+  });
+
+  it('keeps structured tables and extracts markdown tables for unmatched table nodes', () => {
+    const index = adaptDoclingToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        elements: [
+          {
+            ...parsedDocument().elements[0],
+            text: 'Section 9.10.3.1 Fire separations',
+          },
+          {
+            elementId: 'matched-heading',
+            kind: 'table',
+            text: 'Table 9.10.3.1 Ratings',
+            pageNumber: 2,
+            level: null,
+            confidence: 0.96,
+            bbox: null,
+          },
+          {
+            elementId: 'unmatched-heading',
+            kind: 'heading',
+            text: 'Table 9.10.3.2 Door Ratings',
+            pageNumber: 3,
+            level: null,
+            confidence: 0.95,
+            bbox: null,
+          },
+          {
+            elementId: 'unmatched-markdown',
+            kind: 'table',
+            text: '| Door | Rating |\n| --- | --- |\n| Suite door | 45 min |\nNote 1: Applies to dwelling units.',
+            pageNumber: 3,
+            level: null,
+            confidence: 0.93,
+            bbox: null,
+          },
+        ],
+        tables: [
+          {
+            elementId: 'matched-heading',
+            caption: 'Table 9.10.3.1 Ratings',
+            pageNumber: 2,
+            columns: ['Type', 'Rating'],
+            rows: [['Wall', '1 h']],
+            notes: [],
+            confidence: 0.96,
+          },
+        ],
+      },
+      documentRecord()
+    );
+
+    const matchedNode = index.nodes.find((node) => node.logicalRef === 'Table 9.10.3.1');
+    const unmatchedNode = index.nodes.find((node) => node.logicalRef === 'Table 9.10.3.2');
+    const matchedTable = index.tables.find((table) => table.nodeId === matchedNode?.nodeId);
+    const unmatchedTable = index.tables.find((table) => table.nodeId === unmatchedNode?.nodeId);
+
+    expect(index.tables).toHaveLength(2);
+    expect(matchedNode).toMatchObject({ nodeType: 'table' });
+    expect(unmatchedNode).toMatchObject({ nodeType: 'table' });
+    expect(matchedTable).toMatchObject({
+      caption: 'Table 9.10.3.1 Ratings',
+      columns: ['Type', 'Rating'],
+    });
+    expect(unmatchedTable).toMatchObject({
+      caption: 'Door Ratings',
+      columns: ['Door', 'Rating'],
+      rows: [expect.objectContaining({ cells: ['Suite door', '45 min'] })],
+      notes: [expect.objectContaining({ text: 'Note 1: Applies to dwelling units.' })],
+    });
+    expect(matchedNode?.tableId).toBe(matchedTable?.tableId);
+    expect(unmatchedNode?.tableId).toBe(unmatchedTable?.tableId);
+  });
+
+  it('uses the parsed Docling parser version for node provenance', () => {
+    const index = adaptDoclingToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        parserVersion: '2.1.4-docling',
+      },
+      {
+        ...documentRecord(),
+        parserVersion: 'queued-record-version',
+      }
+    );
+
+    expect(index.nodes.map((node) => node.parser.version)).toEqual([
+      '2.1.4-docling',
+      '2.1.4-docling',
+    ]);
+  });
+
   it('preserves bounding boxes from content elements attached to the current node', () => {
     const index = adaptDoclingToBuildingCodeIndex(
       {

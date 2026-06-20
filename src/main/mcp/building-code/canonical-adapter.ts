@@ -63,6 +63,7 @@ function buildNodes(
 ): CodeNodeRecord[] {
   const nodes: CodeNodeRecord[] = [];
   const stack: StackEntry[] = [];
+  const parserVersion = parsed.parserVersion;
 
   for (const element of parsed.elements) {
     const heading = detectBuildingCodeHeading(element.text);
@@ -86,7 +87,7 @@ function buildNodes(
         extractionConfidence: element.confidence,
         parser: {
           name: 'docling',
-          version: document.parserVersion,
+          version: parserVersion,
           sourceElementIds: [element.elementId],
           pageRange: String(element.pageNumber),
           boundingBoxes: element.bbox ? [{ pageNumber: element.pageNumber, ...element.bbox }] : [],
@@ -115,20 +116,33 @@ function buildNodes(
     expandPageRange(current, element.pageNumber);
   }
 
-  attachTableText(nodes, parsed.tables);
+  attachTableText(nodes, parsed.tables, source, document, parserVersion);
   return nodes.map((node) => ({ ...node, text: node.text.trim() }));
 }
 
-function attachTableText(nodes: CodeNodeRecord[], tables: NormalizedDoclingTable[]): void {
+function attachTableText(
+  nodes: CodeNodeRecord[],
+  tables: NormalizedDoclingTable[],
+  source: CodeSourceRecord,
+  document: KnowledgeBaseDocumentRecord,
+  parserVersion: string
+): void {
   for (const table of tables) {
     const heading = detectBuildingCodeHeading(table.caption);
-    if (!heading) {
+    if (!heading || heading.nodeType !== 'table') {
       continue;
     }
-    const node = nodes.find((candidate) => candidate.logicalRef === heading.logicalRef);
-    if (!node) {
-      continue;
+    const node =
+      nodes.find(
+        (candidate) => candidate.nodeType === 'table' && candidate.logicalRef === heading.logicalRef
+      ) ?? createTableNodeFromCaption(nodes, table, heading, source, document, parserVersion);
+
+    if (!node.parser.sourceElementIds.includes(table.elementId)) {
+      node.parser.sourceElementIds.push(table.elementId);
     }
+    node.extractionConfidence = Math.min(node.extractionConfidence, table.confidence);
+    expandPageRange(node, table.pageNumber);
+
     const markdown = [
       table.caption,
       `| ${table.columns.join(' | ')} |`,
@@ -138,6 +152,59 @@ function attachTableText(nodes: CodeNodeRecord[], tables: NormalizedDoclingTable
     ].join('\n');
     node.text = node.text ? `${node.text}\n${markdown}` : markdown;
   }
+}
+
+function createTableNodeFromCaption(
+  nodes: CodeNodeRecord[],
+  table: NormalizedDoclingTable,
+  heading: NonNullable<ReturnType<typeof detectBuildingCodeHeading>>,
+  source: CodeSourceRecord,
+  document: KnowledgeBaseDocumentRecord,
+  parserVersion: string
+): CodeNodeRecord {
+  const parent = findNearestParentNode(nodes, table.pageNumber);
+  const node: CodeNodeRecord = {
+    nodeId: stableNodeId(source.sourceChecksum, heading.logicalRef, heading.nodeType),
+    sourceId: source.sourceId,
+    documentId: document.documentId,
+    nodeType: heading.nodeType,
+    logicalRef: heading.logicalRef,
+    title: heading.title,
+    text: '',
+    pageRange: String(table.pageNumber),
+    headingPath: [...(parent?.headingPath ?? []), table.caption],
+    parentNodeId: parent?.nodeId ?? null,
+    childNodeIds: [],
+    extractionConfidence: table.confidence,
+    parser: {
+      name: 'docling',
+      version: parserVersion,
+      sourceElementIds: [table.elementId],
+      pageRange: String(table.pageNumber),
+      boundingBoxes: [],
+    },
+  };
+
+  if (parent) {
+    parent.childNodeIds.push(node.nodeId);
+  }
+  nodes.push(node);
+  return node;
+}
+
+function findNearestParentNode(nodes: CodeNodeRecord[], pageNumber: number): CodeNodeRecord | null {
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const candidate = nodes[index];
+    if (candidate.nodeType === 'table') {
+      continue;
+    }
+    const [startText] = candidate.pageRange.split('-');
+    const start = Number(startText);
+    if (!Number.isFinite(start) || start <= pageNumber) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 function expandPageRange(node: CodeNodeRecord, pageNumber: number): void {

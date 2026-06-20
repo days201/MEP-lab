@@ -50,9 +50,12 @@ export function buildStructuredTables(
   source: CodeSourceRecord
 ): CodeTableRecord[] {
   const tables: CodeTableRecord[] = [];
+  const matchedNodeIds = new Set<string>();
   for (const doclingTable of doclingTables) {
-    const node = nodes.find((candidate) =>
-      candidate.parser.sourceElementIds.includes(doclingTable.elementId)
+    const node = nodes.find(
+      (candidate) =>
+        candidate.nodeType === 'table' &&
+        candidate.parser.sourceElementIds.includes(doclingTable.elementId)
     );
     if (!node) {
       continue;
@@ -64,6 +67,7 @@ export function buildStructuredTables(
       doclingTable.elementId,
     ]);
     node.tableId = tableId;
+    matchedNodeIds.add(node.nodeId);
     tables.push({
       tableId,
       nodeId: node.nodeId,
@@ -91,7 +95,11 @@ export function buildStructuredTables(
       })),
     });
   }
-  return tables.length > 0 ? tables : extractMarkdownTables(nodes, source);
+  const unmatchedMarkdownTables = extractMarkdownTables(
+    nodes.filter((node) => node.nodeType === 'table' && !matchedNodeIds.has(node.nodeId)),
+    source
+  );
+  return [...tables, ...unmatchedMarkdownTables];
 }
 
 function parseTableText(text: string): {
