@@ -93,9 +93,13 @@ export function detectBuildingCodeHeading(text: string): DetectedBuildingCodeHea
   const bareNumeric = normalized.match(/^(\d+(?:\.\d+){2,}\.?)(?:\s+(.+))?$/);
   if (bareNumeric) {
     const logicalRef = `Section ${stripTrailingDot(bareNumeric[1])}`;
+    const title = bareNumeric[2]?.trim() || logicalRef;
+    if (isBodyProseTitle(title)) {
+      return null;
+    }
     return {
       logicalRef,
-      title: bareNumeric[2]?.trim() || logicalRef,
+      title,
       nodeType: 'section',
       level: 4,
     };
@@ -109,5 +113,25 @@ function stripTrailingDot(value: string): string {
 }
 
 function isBodyProseTitle(title: string): boolean {
-  return /^[a-z][a-z-]*(?:\b|$)/.test(title);
+  const proseLeadingWords = new Set([
+    'applies',
+    'apply',
+    'requires',
+    'require',
+    'shall',
+    'must',
+    'may',
+    'is',
+    'are',
+    'means',
+    'includes',
+    'does',
+    'do',
+  ]);
+  const firstWord = title.match(/^[A-Za-z]+/)?.[0].toLowerCase();
+  if (!firstWord || !proseLeadingWords.has(firstWord)) {
+    return false;
+  }
+
+  return /[.!?]$/.test(title) || title.trim().split(/\s+/).length >= 3;
 }
