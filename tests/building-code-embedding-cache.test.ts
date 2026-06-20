@@ -77,9 +77,14 @@ describe('building-code embedding cache', () => {
   });
 
   it('builds deterministic cache keys from model and text', () => {
-    expect(buildEmbeddingCacheKey('text-embedding-3-small', 'hello')).toMatch(
-      /^text-embedding-3-small:sha256:[a-f0-9]{64}$/
-    );
+    expect(
+      buildEmbeddingCacheKey({
+        model: 'text-embedding-3-small',
+        sourceChecksum: 'sha256:source',
+        nodeId: 'node-1',
+        text: 'hello',
+      })
+    ).toMatch(/^text-embedding-3-small:sha256:[a-f0-9]{64}$/);
   });
 
   it('embeds only chunks missing cached vectors', async () => {
@@ -96,5 +101,40 @@ describe('building-code embedding cache', () => {
 
     await expect(embedMissingChunks(indexWithVectors, secondClient)).resolves.toHaveLength(0);
     expect(secondClient.calls).toHaveLength(0);
+  });
+
+  it('uses stable embedding cache keys across rebuilds for unchanged source checksum, node id, text, and model', () => {
+    const first = fixtureIndex();
+    const second = fixtureIndex();
+
+    expect(first.chunks.map((chunk) => chunk.embeddingCacheKey)).toEqual(
+      second.chunks.map((chunk) => chunk.embeddingCacheKey)
+    );
+    expect(buildEmbeddingCacheKey({
+      model: 'text-embedding-3-small',
+      sourceChecksum: 'sha256:source',
+      nodeId: 'node-1',
+      text: 'same text',
+    })).toBe(
+      buildEmbeddingCacheKey({
+        model: 'text-embedding-3-small',
+        sourceChecksum: 'sha256:source',
+        nodeId: 'node-1',
+        text: 'same text',
+      })
+    );
+  });
+
+  it('returns embedding failure diagnostics without appending partial vectors', async () => {
+    const index = fixtureIndex();
+    const failingClient = {
+      model: 'text-embedding-3-small',
+      embed: async () => {
+        throw new Error('embedding endpoint down');
+      },
+    };
+
+    await expect(embedMissingChunks(index, failingClient)).rejects.toThrow('embedding endpoint down');
+    expect(index.vectors).toEqual([]);
   });
 });

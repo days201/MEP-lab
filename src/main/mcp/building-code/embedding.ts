@@ -16,8 +16,15 @@ export interface BuildingCodeEmbeddingConfig {
   timeoutMs: number;
 }
 
-export function buildEmbeddingCacheKey(model: string, text: string): string {
-  return `${model}:sha256:${sha256(text)}`;
+export interface EmbeddingCacheKeyInput {
+  model: string;
+  sourceChecksum: string;
+  nodeId: string;
+  text: string;
+}
+
+export function buildEmbeddingCacheKey(input: EmbeddingCacheKeyInput): string {
+  return `${input.model}:sha256:${sha256([input.sourceChecksum, input.nodeId, input.text].join('\n'))}`;
 }
 
 export function buildEmbeddingConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BuildingCodeEmbeddingConfig {
@@ -72,9 +79,9 @@ export async function embedMissingChunks(
   index: Pick<BuildingCodeIndex, 'chunks' | 'vectors'>,
   client: BuildingCodeEmbeddingClient
 ): Promise<CodeVectorRecord[]> {
-  const existing = new Set(index.vectors.map((vector) => vectorKey(vector.chunkId, vector.embeddingModel)));
+  const existing = new Set(index.vectors.map((vector) => vectorKey(vector.embeddingTextHash, vector.embeddingModel)));
   const missingChunks = index.chunks.filter(
-    (chunk) => !existing.has(vectorKey(chunk.chunkId, client.model))
+    (chunk) => !existing.has(vectorKey(chunk.embeddingCacheKey, client.model))
   );
 
   if (missingChunks.length === 0) {
@@ -98,12 +105,12 @@ function vectorForChunk(
     chunkId: chunk.chunkId,
     embeddingModel,
     embedding,
-    embeddingTextHash: `sha256:${sha256(chunk.text)}`,
+    embeddingTextHash: chunk.embeddingCacheKey,
   };
 }
 
-function vectorKey(chunkId: string, model: string): string {
-  return `${model}:${chunkId}`;
+function vectorKey(chunkCacheKey: string, model: string): string {
+  return `${model}:${chunkCacheKey}`;
 }
 
 function sha256(text: string): string {
