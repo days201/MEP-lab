@@ -103,6 +103,37 @@ describe('building-code embedding cache', () => {
     expect(secondClient.calls).toHaveLength(0);
   });
 
+  it('relinks a reusable cached embedding to the current chunk id', async () => {
+    const fakeClient = new FakeEmbeddingClient();
+    const index = fixtureIndex();
+    const [currentChunk, ...remainingChunks] = index.chunks;
+    const reusedEmbedding = [0.25, 0.5, 0.75];
+    const staleVector: CodeVectorRecord = {
+      chunkId: 'stale-chunk-id',
+      embeddingModel: fakeClient.model,
+      embedding: reusedEmbedding,
+      embeddingTextHash: currentChunk.embeddingCacheKey,
+    };
+
+    index.vectors.push(staleVector);
+
+    const created = await embedMissingChunks(index, fakeClient);
+
+    expect(fakeClient.calls).toEqual(remainingChunks.map((chunk) => chunk.text));
+    expect(created).toContainEqual({
+      chunkId: currentChunk.chunkId,
+      embeddingModel: fakeClient.model,
+      embedding: reusedEmbedding,
+      embeddingTextHash: currentChunk.embeddingCacheKey,
+    });
+    expect(index.vectors).toContainEqual({
+      chunkId: currentChunk.chunkId,
+      embeddingModel: fakeClient.model,
+      embedding: reusedEmbedding,
+      embeddingTextHash: currentChunk.embeddingCacheKey,
+    });
+  });
+
   it('uses stable embedding cache keys across rebuilds for unchanged source checksum, node id, text, and model', () => {
     const first = fixtureIndex();
     const second = fixtureIndex();
@@ -136,5 +167,21 @@ describe('building-code embedding cache', () => {
 
     await expect(embedMissingChunks(index, failingClient)).rejects.toThrow('embedding endpoint down');
     expect(index.vectors).toEqual([]);
+  });
+
+  it('rejects partial embedding batches without appending corrupt vectors', async () => {
+    const index = fixtureIndex();
+    const originalVectors = [...index.vectors];
+    const expectedCount = index.chunks.length;
+    const returnedCount = expectedCount - 1;
+    const partialClient = {
+      model: 'text-embedding-3-small',
+      embed: async (texts: string[]) => texts.slice(1).map(() => [1, 0, 0]),
+    };
+
+    await expect(embedMissingChunks(index, partialClient)).rejects.toThrow(
+      `Embedding client returned ${returnedCount} embeddings for ${expectedCount} chunks`
+    );
+    expect(index.vectors).toEqual(originalVectors);
   });
 });

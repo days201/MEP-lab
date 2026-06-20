@@ -79,21 +79,68 @@ export async function embedMissingChunks(
   index: Pick<BuildingCodeIndex, 'chunks' | 'vectors'>,
   client: BuildingCodeEmbeddingClient
 ): Promise<CodeVectorRecord[]> {
-  const existing = new Set(index.vectors.map((vector) => vectorKey(vector.embeddingTextHash, vector.embeddingModel)));
-  const missingChunks = index.chunks.filter(
-    (chunk) => !existing.has(vectorKey(chunk.embeddingCacheKey, client.model))
+  const existingChunks = new Set(
+    index.vectors.map((vector) =>
+      vectorChunkKey(vector.embeddingTextHash, vector.embeddingModel, vector.chunkId)
+    )
   );
+  const reusableVectors = new Map(
+    index.vectors.map((vector) => [vectorKey(vector.embeddingTextHash, vector.embeddingModel), vector])
+  );
+  const relinked: CodeVectorRecord[] = [];
+  const missingChunks: CodeChunkRecord[] = [];
 
-  if (missingChunks.length === 0) {
+  for (const chunk of index.chunks) {
+    const chunkVectorKey = vectorChunkKey(chunk.embeddingCacheKey, client.model, chunk.chunkId);
+
+    if (existingChunks.has(chunkVectorKey)) {
+      continue;
+    }
+
+    const reusable = reusableVectors.get(vectorKey(chunk.embeddingCacheKey, client.model));
+
+    if (reusable) {
+      relinked.push({
+        chunkId: chunk.chunkId,
+        embeddingModel: client.model,
+        embedding: [...reusable.embedding],
+        embeddingTextHash: chunk.embeddingCacheKey,
+      });
+      continue;
+    }
+
+    missingChunks.push(chunk);
+  }
+
+  if (missingChunks.length === 0 && relinked.length === 0) {
     return [];
   }
 
-  const embeddings = await client.embed(missingChunks.map((chunk) => chunk.text));
-  const created = missingChunks.map((chunk, index) => vectorForChunk(chunk, client.model, embeddings[index]));
+  const embeddings = missingChunks.length > 0
+    ? await client.embed(missingChunks.map((chunk) => chunk.text))
+    : [];
+  validateEmbeddingBatch(embeddings, missingChunks.length);
+
+  const embedded = missingChunks.map((chunk, index) => vectorForChunk(chunk, client.model, embeddings[index]));
+  const created = [...relinked, ...embedded];
 
   index.vectors.push(...created);
 
   return created;
+}
+
+function validateEmbeddingBatch(embeddings: number[][], expectedLength: number): void {
+  if (embeddings.length !== expectedLength) {
+    throw new Error(`Embedding client returned ${embeddings.length} embeddings for ${expectedLength} chunks`);
+  }
+
+  const invalidIndex = embeddings.findIndex(
+    (embedding) => !Array.isArray(embedding) || embedding.some((value) => !Number.isFinite(value))
+  );
+
+  if (invalidIndex !== -1) {
+    throw new Error(`Embedding client returned an invalid embedding at index ${invalidIndex}`);
+  }
 }
 
 function vectorForChunk(
@@ -111,6 +158,10 @@ function vectorForChunk(
 
 function vectorKey(chunkCacheKey: string, model: string): string {
   return `${model}:${chunkCacheKey}`;
+}
+
+function vectorChunkKey(chunkCacheKey: string, model: string, chunkId: string): string {
+  return `${vectorKey(chunkCacheKey, model)}:${chunkId}`;
 }
 
 function sha256(text: string): string {
