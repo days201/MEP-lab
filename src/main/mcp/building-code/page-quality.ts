@@ -1,9 +1,10 @@
 export interface PageQualityInput {
+  pageNumber: number;
   text: string;
   textItemCount: number;
   imageAreaRatio: number;
   tableLikeLineCount: number;
-  previousPageHasCodePattern?: boolean;
+  previousPageHadCodePattern?: boolean;
   nextPageHasCodePattern?: boolean;
 }
 
@@ -18,6 +19,7 @@ export interface PageQualityMetrics {
 }
 
 export interface PageQualityScore {
+  pageNumber: number;
   suspicious: boolean;
   reasons: string[];
   softReasons: string[];
@@ -35,9 +37,9 @@ export const PAGE_QUALITY_THRESHOLDS = {
 } as const;
 
 const CODE_PATTERN_REGEXES = [
-  /\b(?:Section|Subsection|Article|Sentence|Part|Chapter|Table|Appendix|Note)\s+[A-Z]?\d+(?:\.\d+){1,5}(?:\.)?/i,
+  /\b(?:Section|Subsection|Article|Sentence|Part|Chapter|Table|Appendix|Note)\s+[A-Z]?\d+(?:\.\d+){0,6}\.?(?=\s|$|[),;:])/i,
   /\b(?:Section|Subsection|Article|Sentence|Part|Chapter|Table|Appendix|Note)\s+[A-Z]\b/i,
-  /\b\d+(?:\.\d+){2,6}(?:\.)?\b/,
+  /\b[A-Z]?\d+(?:\.\d+){1,6}\.?(?=\s|$|[),;:])/i,
 ];
 
 export function hasExpectedCodePattern(text: string): boolean {
@@ -53,7 +55,7 @@ export function scorePageExtractionQuality(input: PageQualityInput): PageQuality
   const imageAreaRatio = clampRatio(input.imageAreaRatio);
   const tableLikeLineCount = Math.max(0, input.tableLikeLineCount);
   const hasCodePattern = hasExpectedCodePattern(text);
-  const nearCodePage = Boolean(input.previousPageHasCodePattern || input.nextPageHasCodePattern);
+  const nearCodePage = Boolean(input.previousPageHadCodePattern || input.nextPageHasCodePattern);
 
   const reasons: string[] = [];
   const softReasons: string[] = [];
@@ -89,6 +91,7 @@ export function scorePageExtractionQuality(input: PageQualityInput): PageQuality
   }
 
   return {
+    pageNumber: input.pageNumber,
     suspicious: reasons.length > 0,
     reasons,
     softReasons,
