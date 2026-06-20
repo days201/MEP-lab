@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   ClientEvent,
   ServerEvent,
@@ -444,6 +444,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getOverview: (): Promise<KnowledgeBaseOverview> =>
       ipcRenderer.invoke('knowledgeBase.getOverview'),
     selectDocuments: (): Promise<string[]> => ipcRenderer.invoke('knowledgeBase.selectDocuments'),
+    getDroppedFilePaths: (files: File[]): string[] =>
+      Array.from(files)
+        .map((file) => webUtils.getPathForFile(file))
+        .filter((filePath): filePath is string => Boolean(filePath)),
     uploadDocuments: (filePaths: string[]): Promise<KnowledgeBaseOverview> =>
       ipcRenderer.invoke('knowledgeBase.uploadDocuments', filePaths),
     reparseDocument: (documentId: string): Promise<KnowledgeBaseOverview> =>
@@ -692,6 +696,7 @@ declare global {
       knowledgeBase: {
         getOverview: () => Promise<KnowledgeBaseOverview>;
         selectDocuments: () => Promise<string[]>;
+        getDroppedFilePaths: (files: File[]) => string[];
         uploadDocuments: (filePaths: string[]) => Promise<KnowledgeBaseOverview>;
         reparseDocument: (documentId: string) => Promise<KnowledgeBaseOverview>;
         removeDocument: (documentId: string) => Promise<KnowledgeBaseOverview>;

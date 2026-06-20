@@ -22,12 +22,16 @@ describe('knowledge-base IPC and preload surface', () => {
 
   it('exposes renderer-safe preload methods', () => {
     expect(preload).toContain('knowledgeBase: {');
+    expect(preload).toContain("import { contextBridge, ipcRenderer, webUtils } from 'electron';");
     expect(preload).toContain("ipcRenderer.invoke('knowledgeBase.getOverview')");
     expect(preload).toContain("ipcRenderer.invoke('knowledgeBase.selectDocuments')");
     expect(preload).toContain("ipcRenderer.invoke('knowledgeBase.uploadDocuments'");
     expect(preload).toContain("ipcRenderer.invoke('knowledgeBase.reparseDocument'");
     expect(preload).toContain("ipcRenderer.invoke('knowledgeBase.removeDocument'");
     expect(preload).toContain("ipcRenderer.invoke('knowledgeBase.revealSource'");
+    expect(preload).toContain('getDroppedFilePaths: (files: File[]): string[] =>');
+    expect(preload).toContain('webUtils.getPathForFile(file)');
+    expect(preload).toContain('getDroppedFilePaths: (files: File[]) => string[];');
   });
 
   it('uses a safe optional dialog owner for knowledge-base document selection', () => {
