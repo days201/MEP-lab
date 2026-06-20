@@ -164,6 +164,54 @@ describe('building-code LiteParse adapter', () => {
     });
   });
 
+  it('preserves native non-text content and merges OCR when native page text is empty', () => {
+    const nativeDocument = normalizeLiteParseResult({
+      parserVersion: '2.1.2',
+      pages: [
+        litePage(1, '', [
+          textItem('Table 9.10.3.1 Ratings', 10, 20, 180, 14),
+          textItem('Wall | Rating', 10, 44, 120, 12),
+        ]),
+      ],
+    });
+    const ocrDocument = normalizeLiteParseResult(
+      {
+        parserVersion: '2.1.2',
+        pages: [
+          litePage(1, 'Article 9.10.3.1 OCR recovered text.', [
+            textItem('Article 9.10.3.1 OCR recovered text.', 12, 70, 260, 14),
+          ]),
+        ],
+      },
+      { extractionMode: 'ocr' }
+    );
+
+    const merged = mergeLiteParseOcrPages(nativeDocument, ocrDocument, [1]);
+
+    expect(merged.pages[0]).toMatchObject({
+      pageNumber: 1,
+      text: 'Article 9.10.3.1 OCR recovered text.',
+      extractionMode: 'native_plus_ocr',
+    });
+    expect(merged.pages[0].boundingBoxes).toEqual([
+      { x: 10, y: 20, width: 180, height: 14 },
+      { x: 10, y: 44, width: 120, height: 12 },
+      { x: 12, y: 70, width: 260, height: 14 },
+    ]);
+    expect(merged.elements.map((element) => element.text)).toEqual(
+      expect.arrayContaining([
+        'Table 9.10.3.1 Ratings',
+        'Wall | Rating',
+        'Article 9.10.3.1 OCR recovered text.',
+      ])
+    );
+    expect(merged.elements).toHaveLength(3);
+    expect(merged.tables.map((table) => table.caption)).toEqual([
+      'Table 9.10.3.1 Ratings',
+      'Wall | Rating',
+    ]);
+  });
+
   it('continues with native extraction when OCR batch and page fallback fail', async () => {
     const calls: LiteParseOptions[] = [];
     const executor: LiteParseExecutor = async ({ options }) => {
@@ -311,6 +359,50 @@ describe('building-code LiteParse adapter', () => {
     expect(document.diagnostics).toContain(
       'OCR produced no result for suspicious page 3; native extraction preserved.'
     );
+  });
+
+  it('does not count selected OCR pages that have no usable content', async () => {
+    const executor: LiteParseExecutor = async ({ options }) => {
+      if (!options.ocrEnabled) {
+        return {
+          parserVersion: '2.1.2',
+          pages: [
+            litePage(
+              1,
+              'Section 1.1 Scope provisions apply to this document and contain enough native code words for acceptance.',
+              [textItem('Section 1.1 Scope provisions apply to this document', 10, 20, 320, 14)]
+            ),
+            litePage(2, 'Scan', [textItem('Scan', 10, 20, 35, 12)]),
+          ],
+        };
+      }
+
+      return {
+        parserVersion: '2.1.2',
+        pages: [litePage(2, '')],
+      };
+    };
+
+    const document = await parseDocumentWithLiteParse({
+      filePath: 'C:\\codes\\nbc.pdf',
+      executor,
+      logicalCoreCount: 16,
+    });
+
+    expect(document.pages[1]).toMatchObject({
+      pageNumber: 2,
+      text: 'Scan',
+      extractionMode: 'native',
+    });
+    expect(document.diagnostics).toContain(
+      'OCR produced no usable result for suspicious page 2; native extraction preserved.'
+    );
+    expect(document.diagnostics).toContain('Parsed 2 pages. OCR used on 0 pages.');
+    expect(document.pageDiagnostics.find((item) => item.pageNumber === 2)).toMatchObject({
+      extractionMode: 'native',
+      severity: 'warning',
+      message: 'LiteParse OCR produced no usable result; native extraction preserved',
+    });
   });
 
   it('caps LiteParse OCR workers conservatively', () => {

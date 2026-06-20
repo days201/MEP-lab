@@ -145,7 +145,8 @@ export async function parseDocumentWithLiteParse(
   let mergedDocument = nativeDocument;
   let successfulOcrPages = 0;
   const successfulOcrPageNumbers = new Set<number>();
-  const omittedBatchOcrPageNumbers = new Set<number>();
+  const missingOcrPageNumbers = new Set<number>();
+  const unusableOcrPageNumbers = new Set<number>();
 
   try {
     const ocrRaw = await executor({ filePath: input.filePath, options: ocrOptions });
@@ -157,10 +158,13 @@ export async function parseDocumentWithLiteParse(
     successfulOcrPages = successfulOcrPageNumbers.size;
     for (const pageNumber of suspiciousPages) {
       if (!successfulOcrPageNumbers.has(pageNumber)) {
-        omittedBatchOcrPageNumbers.add(pageNumber);
-        diagnostics.push(
-          `OCR produced no result for suspicious page ${pageNumber}; native extraction preserved.`
-        );
+        const ocrPageReturned = ocrDocument.pages.some((page) => page.pageNumber === pageNumber);
+        if (ocrPageReturned) {
+          unusableOcrPageNumbers.add(pageNumber);
+        } else {
+          missingOcrPageNumbers.add(pageNumber);
+        }
+        diagnostics.push(ocrNoResultDiagnostic(pageNumber, ocrPageReturned));
       }
     }
   } catch (error) {
@@ -177,8 +181,20 @@ export async function parseDocumentWithLiteParse(
         });
         const pageOcrDocument = normalizeLiteParseResult(pageRaw, { extractionMode: 'ocr' });
         mergedDocument = mergeLiteParseOcrPages(mergedDocument, pageOcrDocument, [pageNumber]);
-        for (const mergedPageNumber of mergedOcrPageNumbers(pageOcrDocument, [pageNumber])) {
+        const mergedPageNumbers = mergedOcrPageNumbers(pageOcrDocument, [pageNumber]);
+        for (const mergedPageNumber of mergedPageNumbers) {
           successfulOcrPageNumbers.add(mergedPageNumber);
+        }
+        if (mergedPageNumbers.length === 0) {
+          const ocrPageReturned = pageOcrDocument.pages.some(
+            (page) => page.pageNumber === pageNumber
+          );
+          if (ocrPageReturned) {
+            unusableOcrPageNumbers.add(pageNumber);
+          } else {
+            missingOcrPageNumbers.add(pageNumber);
+          }
+          diagnostics.push(ocrNoResultDiagnostic(pageNumber, ocrPageReturned));
         }
         successfulOcrPages = successfulOcrPageNumbers.size;
       } catch (error) {
@@ -187,27 +203,32 @@ export async function parseDocumentWithLiteParse(
     }
   }
 
-  const updatedPageDiagnostics = pageDiagnostics.map((diagnostic) =>
-    successfulOcrPageNumbers.has(diagnostic.pageNumber)
-      ? {
-          ...diagnostic,
-          extractionMode: pageHadNativeText(nativeDocument, diagnostic.pageNumber)
-            ? 'native_plus_ocr'
-            : 'ocr',
-          severity: 'info',
-          message: 'LiteParse OCR merged for suspicious page',
-        }
-      : diagnostic
-  ).map((diagnostic) =>
-    omittedBatchOcrPageNumbers.has(diagnostic.pageNumber)
-      ? {
-          ...diagnostic,
-          extractionMode: 'native',
-          severity: 'warning',
-          message: 'LiteParse OCR produced no result; native extraction preserved',
-        }
-      : diagnostic
-  );
+  const updatedPageDiagnostics = pageDiagnostics
+    .map((diagnostic) =>
+      successfulOcrPageNumbers.has(diagnostic.pageNumber)
+        ? {
+            ...diagnostic,
+            extractionMode: documentHasUsefulPageContent(nativeDocument, diagnostic.pageNumber)
+              ? 'native_plus_ocr'
+              : 'ocr',
+            severity: 'info',
+            message: 'LiteParse OCR merged for suspicious page',
+          }
+        : diagnostic
+    )
+    .map((diagnostic) =>
+      missingOcrPageNumbers.has(diagnostic.pageNumber) ||
+      unusableOcrPageNumbers.has(diagnostic.pageNumber)
+        ? {
+            ...diagnostic,
+            extractionMode: 'native',
+            severity: 'warning',
+            message: unusableOcrPageNumbers.has(diagnostic.pageNumber)
+              ? 'LiteParse OCR produced no usable result; native extraction preserved'
+              : 'LiteParse OCR produced no result; native extraction preserved',
+          }
+        : diagnostic
+    );
 
   return normalizeParserDocument({
     ...mergedDocument,
@@ -255,11 +276,15 @@ export function mergeLiteParseOcrPages(
 
   const pages = nativeDocument.pages.map((nativePage) => {
     const ocrPage = ocrPagesByNumber.get(nativePage.pageNumber);
-    if (!selectedPages.has(nativePage.pageNumber) || !ocrPage) {
+    if (
+      !selectedPages.has(nativePage.pageNumber) ||
+      !ocrPage ||
+      !documentHasUsefulPageContent(ocrDocument, nativePage.pageNumber)
+    ) {
       return nativePage;
     }
 
-    if (nativePage.text.trim().length === 0) {
+    if (!documentHasUsefulPageContent(nativeDocument, nativePage.pageNumber)) {
       return {
         ...ocrPage,
         extractionMode: 'ocr',
@@ -274,8 +299,10 @@ export function mergeLiteParseOcrPages(
     };
   });
 
-  const selectedPagesWithOcr = new Set(
-    selectedPageNumbers.filter((pageNumber) => ocrPagesByNumber.has(pageNumber))
+  const selectedPagesWithUsefulOcr = new Set(
+    selectedPageNumbers.filter((pageNumber) =>
+      documentHasUsefulPageContent(ocrDocument, pageNumber)
+    )
   );
   const nativeElementsByPage = groupByPageNumber(nativeDocument.elements);
   const ocrElementsByPage = groupByPageNumber(ocrDocument.elements);
@@ -286,12 +313,12 @@ export function mergeLiteParseOcrPages(
   const elements = nativeDocument.pages
     .flatMap((page) => {
       const nativeElements = nativeElementsByPage.get(page.pageNumber) ?? [];
-      if (!selectedPagesWithOcr.has(page.pageNumber)) {
+      if (!selectedPagesWithUsefulOcr.has(page.pageNumber)) {
         return nativeElements;
       }
 
       const ocrElements = ocrElementsByPage.get(page.pageNumber) ?? [];
-      if (!pageHadNativeText(nativeDocument, page.pageNumber)) {
+      if (!documentHasUsefulPageContent(nativeDocument, page.pageNumber)) {
         for (const element of ocrElements) {
           ocrElementIdRemaps.set(
             elementIdentityKey(element.pageNumber, element.elementId),
@@ -307,14 +334,14 @@ export function mergeLiteParseOcrPages(
   const tables = nativeDocument.pages
     .flatMap((page) => {
       const nativeTables = nativeTablesByPage.get(page.pageNumber) ?? [];
-      if (!selectedPagesWithOcr.has(page.pageNumber)) {
+      if (!selectedPagesWithUsefulOcr.has(page.pageNumber)) {
         return nativeTables;
       }
 
       const ocrTables = (ocrTablesByPage.get(page.pageNumber) ?? []).map((table) =>
         remapOcrTableElementId(table, ocrElementIdRemaps)
       );
-      if (!pageHadNativeText(nativeDocument, page.pageNumber)) {
+      if (!documentHasUsefulPageContent(nativeDocument, page.pageNumber)) {
         return ocrTables;
       }
 
@@ -674,12 +701,31 @@ function mergedOcrPageNumbers(
 ): number[] {
   const selected = new Set(selectedPageNumbers);
   return ocrDocument.pages
-    .filter((page) => selected.has(page.pageNumber))
+    .filter(
+      (page) =>
+        selected.has(page.pageNumber) && documentHasUsefulPageContent(ocrDocument, page.pageNumber)
+    )
     .map((page) => page.pageNumber);
 }
 
-function pageHadNativeText(document: NormalizedLiteParseDocument, pageNumber: number): boolean {
-  return (document.pages.find((page) => page.pageNumber === pageNumber)?.text.trim().length ?? 0) > 0;
+function ocrNoResultDiagnostic(pageNumber: number, ocrPageReturned: boolean): string {
+  return ocrPageReturned
+    ? `OCR produced no usable result for suspicious page ${pageNumber}; native extraction preserved.`
+    : `OCR produced no result for suspicious page ${pageNumber}; native extraction preserved.`;
+}
+
+function documentHasUsefulPageContent(
+  document: NormalizedLiteParseDocument,
+  pageNumber: number
+): boolean {
+  const page = document.pages.find((page) => page.pageNumber === pageNumber);
+
+  return Boolean(
+    (page?.text.trim().length ?? 0) > 0 ||
+    (page?.boundingBoxes.length ?? 0) > 0 ||
+    document.elements.some((element) => element.pageNumber === pageNumber) ||
+    document.tables.some((table) => table.pageNumber === pageNumber)
+  );
 }
 
 function mergePageText(nativeText: string, ocrText: string): string {
