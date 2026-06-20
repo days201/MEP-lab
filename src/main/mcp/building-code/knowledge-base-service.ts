@@ -34,6 +34,7 @@ import type {
 
 type ParseDocument = (filePath: string) => Promise<NormalizedDoclingResult>;
 type EmbeddingClientFactory = () => BuildingCodeEmbeddingClient;
+type SaveIndex = (indexDir: string, index: BuildingCodeIndex) => Promise<void>;
 
 export interface KnowledgeBaseServiceOptions {
   userDataPath: string;
@@ -41,6 +42,7 @@ export interface KnowledgeBaseServiceOptions {
   randomId?: () => string;
   parseDocument?: ParseDocument;
   embeddingClientFactory?: EmbeddingClientFactory;
+  saveIndex?: SaveIndex;
 }
 
 export class KnowledgeBaseService {
@@ -50,6 +52,7 @@ export class KnowledgeBaseService {
   private readonly randomId: () => string;
   private readonly parseDocument: ParseDocument;
   private readonly embeddingClientFactory: EmbeddingClientFactory;
+  private readonly saveIndex: SaveIndex;
 
   constructor(options: KnowledgeBaseServiceOptions) {
     this.paths = buildKnowledgeBaseStoragePaths(options.userDataPath);
@@ -64,6 +67,7 @@ export class KnowledgeBaseService {
           pythonPath: process.env.DOCLING_PYTHON_PATH || process.env.PYTHON || 'python',
         }));
     this.embeddingClientFactory = options.embeddingClientFactory ?? createOpenAIEmbeddingClient;
+    this.saveIndex = options.saveIndex ?? saveBuildingCodeIndex;
   }
 
   getIndexDir(): string {
@@ -82,9 +86,10 @@ export class KnowledgeBaseService {
     for (const filePath of filePaths) {
       const record = await this.createQueuedRecord(filePath);
       await this.registry.upsert(record);
+      let parseStartedAt: string | null = null;
 
       try {
-        const parseStartedAt = this.now();
+        parseStartedAt = this.now();
         await this.registry.upsert({
           ...record,
           status: 'parsing',
@@ -107,7 +112,7 @@ export class KnowledgeBaseService {
         await this.registry.upsert({
           ...record,
           status: 'failed',
-          parseStartedAt: record.parseStartedAt ?? this.now(),
+          parseStartedAt: parseStartedAt ?? record.parseStartedAt ?? this.now(),
           parseCompletedAt: this.now(),
           diagnostics: [diagnostic('error', 'parse', errorMessage(error), record.documentId)],
           failureMessage: errorMessage(error),
@@ -171,6 +176,12 @@ export class KnowledgeBaseService {
 
   async removeDocument(documentId: string): Promise<KnowledgeBaseOverview> {
     await ensureKnowledgeBaseStorage(this.paths);
+    const document = await this.registry.get(documentId);
+
+    if (!document || document.status === 'removed') {
+      throw new Error(`Knowledge-base document not found: ${documentId}`);
+    }
+
     await this.registry.markRemoved(documentId, this.now());
     return this.rebuildIndex();
   }
@@ -217,7 +228,7 @@ export class KnowledgeBaseService {
       }
     }
 
-    if (nextIndex.nodes.length === 0 && activeDocuments.length > 0 && failedDocumentIds.size > 0) {
+    if (failedDocumentIds.size > 0) {
       return this.overviewFrom(await this.registry.list(), previousIndex);
     }
 
@@ -237,7 +248,12 @@ export class KnowledgeBaseService {
       ...rebuildDiagnostics.map((item) => item.message),
       ...(embeddingWarning ? [embeddingWarning.message] : [])
     );
-    await saveBuildingCodeIndex(this.paths.indexDir, nextIndex);
+    try {
+      await this.saveIndex(this.paths.indexDir, nextIndex);
+    } catch {
+      return this.overviewFrom(await this.registry.list(), previousIndex);
+    }
+
     await this.updateDocumentSummaries(nextIndex, failedDocumentIds, embeddingWarning);
 
     return this.overviewFrom(await this.registry.list(), nextIndex);
