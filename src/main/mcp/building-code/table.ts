@@ -1,6 +1,6 @@
 import { buildCitation, stableRecordId } from './hierarchy';
 import { detectBuildingCodeHeading } from './heading-detector';
-import type { NormalizedDoclingTable } from './docling-parser';
+import type { NormalizedParserTable } from './parser-adapter';
 import type { CodeCitation, CodeNodeRecord, CodeSourceRecord, CodeTableRecord } from './types';
 
 export function extractMarkdownTables(
@@ -47,13 +47,13 @@ export function extractMarkdownTables(
 
 export function buildStructuredTables(
   nodes: CodeNodeRecord[],
-  doclingTables: NormalizedDoclingTable[],
+  parserTables: NormalizedParserTable[],
   source: CodeSourceRecord
 ): CodeTableRecord[] {
   const tables: CodeTableRecord[] = [];
   const matchedNodeIds = new Set<string>();
-  for (const doclingTable of doclingTables) {
-    const node = findStructuredTableNode(nodes, doclingTable);
+  for (const parserTable of parserTables) {
+    const node = findStructuredTableNode(nodes, parserTable);
     if (!node) {
       continue;
     }
@@ -61,10 +61,10 @@ export function buildStructuredTables(
     const tableId = stableRecordId('table', [
       source.sourceChecksum,
       node.nodeId,
-      doclingTable.elementId,
+      parserTable.elementId,
     ]);
     node.tableId = tableId;
-    for (const sourceElementId of sourceIdsFor(doclingTable)) {
+    for (const sourceElementId of sourceIdsFor(parserTable)) {
       if (!node.parser.sourceElementIds.includes(sourceElementId)) {
         node.parser.sourceElementIds.push(sourceElementId);
       }
@@ -73,9 +73,9 @@ export function buildStructuredTables(
     tables.push({
       tableId,
       nodeId: node.nodeId,
-      caption: doclingTable.caption,
-      columns: doclingTable.columns,
-      rows: doclingTable.rows.map((cells, index) => ({
+      caption: parserTable.caption,
+      columns: parserTable.columns,
+      rows: parserTable.rows.map((cells, index) => ({
         rowId: stableRecordId('table-row', [
           source.sourceChecksum,
           node.nodeId,
@@ -85,7 +85,7 @@ export function buildStructuredTables(
         cells,
         citation: citationForTablePart(citation, 'table-row', String(index), cells.join('|')),
       })),
-      notes: doclingTable.notes.map((text, index) => ({
+      notes: parserTable.notes.map((text, index) => ({
         noteId: stableRecordId('table-note', [
           source.sourceChecksum,
           node.nodeId,
@@ -106,18 +106,18 @@ export function buildStructuredTables(
 
 function findStructuredTableNode(
   nodes: CodeNodeRecord[],
-  doclingTable: NormalizedDoclingTable
+  parserTable: NormalizedParserTable
 ): CodeNodeRecord | undefined {
   const sourceElementMatch = nodes.find(
     (candidate) =>
       candidate.nodeType === 'table' &&
-      candidate.parser.sourceElementIds.includes(doclingTable.elementId)
+      candidate.parser.sourceElementIds.includes(parserTable.elementId)
   );
   if (sourceElementMatch) {
     return sourceElementMatch;
   }
 
-  const heading = detectBuildingCodeHeading(doclingTable.caption);
+  const heading = detectBuildingCodeHeading(parserTable.caption);
   if (!heading || heading.nodeType !== 'table') {
     return undefined;
   }
@@ -127,7 +127,7 @@ function findStructuredTableNode(
   );
 }
 
-function sourceIdsFor(table: NormalizedDoclingTable): string[] {
+function sourceIdsFor(table: NormalizedParserTable): string[] {
   const sourceIds = Array.isArray(table.sourceIds) && table.sourceIds.length > 0
     ? table.sourceIds
     : [table.elementId];

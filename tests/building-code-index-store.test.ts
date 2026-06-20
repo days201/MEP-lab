@@ -53,6 +53,126 @@ describe('building-code index store', () => {
     expect(loaded).toEqual(index);
   });
 
+  it('preserves LiteParse parser provenance across save and load', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+
+    const parser = {
+      name: 'liteparse' as const,
+      version: '0.7.1',
+      sourceElementIds: ['lp-table-1'],
+      pageRange: '12',
+      boundingBoxes: [
+        {
+          pageNumber: 12,
+          x: 72,
+          y: 144,
+          width: 360,
+          height: 120,
+        },
+      ],
+    };
+    const source = {
+      sourceId: 'source-liteparse-1',
+      documentId: 'doc-liteparse-1',
+      codeFamily: 'NBC',
+      edition: '2025',
+      jurisdictionScope: 'Canada',
+      sourceTitle: 'LiteParse NBC fixture',
+      sourceUrl: 'https://example.test/nbc-liteparse.pdf',
+      localSourcePath: 'fixtures/nbc-liteparse.pdf',
+      sourceChecksum: 'sha256:liteparse',
+    };
+    const index: BuildingCodeIndex = {
+      ...minimalIndex(),
+      sources: [source],
+      nodes: [
+        {
+          nodeId: 'node-liteparse-table-1',
+          sourceId: source.sourceId,
+          documentId: source.documentId,
+          nodeType: 'table',
+          logicalRef: 'Table 6.2.1.1',
+          title: 'LiteParse table',
+          text: 'LiteParse table text.',
+          pageRange: '12',
+          headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+          parentNodeId: null,
+          childNodeIds: [],
+          extractionConfidence: 0.93,
+          parser,
+        },
+      ],
+      tables: [
+        {
+          tableId: 'table-liteparse-1',
+          nodeId: 'node-liteparse-table-1',
+          caption: 'LiteParse table',
+          columns: ['Item', 'Value'],
+          rows: [
+            {
+              rowId: 'row-liteparse-1',
+              cells: ['A', 'B'],
+              citation: {
+                status: 'complete',
+                citationId: 'citation-liteparse-row-1',
+                sourceId: source.sourceId,
+                documentId: source.documentId,
+                codeFamily: source.codeFamily,
+                edition: source.edition,
+                jurisdictionScope: source.jurisdictionScope,
+                sourceTitle: source.sourceTitle,
+                sourceUrl: source.sourceUrl,
+                localSourcePath: source.localSourcePath,
+                sourceChecksum: source.sourceChecksum,
+                logicalRef: 'Table 6.2.1.1, Row 1',
+                nodeType: 'table-row',
+                pageRange: '12',
+                headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+                extractionConfidence: 0.93,
+                parser,
+                displayCitation: 'NBC 2025, Table 6.2.1.1, Row 1',
+              },
+            },
+          ],
+          notes: [
+            {
+              noteId: 'note-liteparse-a',
+              text: 'LiteParse note.',
+              citation: {
+                status: 'partial',
+                citationId: 'citation-liteparse-note-a',
+                sourceId: source.sourceId,
+                documentId: source.documentId,
+                codeFamily: source.codeFamily,
+                edition: source.edition,
+                jurisdictionScope: source.jurisdictionScope,
+                sourceTitle: source.sourceTitle,
+                sourceUrl: source.sourceUrl,
+                localSourcePath: source.localSourcePath,
+                sourceChecksum: source.sourceChecksum,
+                logicalRef: 'Table 6.2.1.1, Note a',
+                nodeType: 'table-note',
+                pageRange: '12',
+                headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+                extractionConfidence: 0.93,
+                parser,
+                displayCitation: 'NBC 2025, Table 6.2.1.1, Note a',
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    await saveBuildingCodeIndex(tempRoot, index);
+    const loaded = await loadBuildingCodeIndex(tempRoot);
+
+    expect(loaded.nodes[0].parser).toEqual(parser);
+    expect(loaded.tables[0].rows[0].citation.parser).toEqual(parser);
+    expect(loaded.tables[0].notes[0].citation.parser).toEqual(parser);
+  });
+
   it('rejects unsupported index schema versions', async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
     tempRoots.push(tempRoot);

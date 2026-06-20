@@ -301,7 +301,7 @@ function isStructurallyValidParserProvenance(value: unknown): value is CodeParse
   }
 
   return (
-    (value.name === 'docling' || value.name === 'fixture') &&
+    (value.name === 'docling' || value.name === 'liteparse' || value.name === 'fixture') &&
     typeof value.version === 'string' &&
     Array.isArray(value.sourceElementIds) &&
     value.sourceElementIds.every((item) => typeof item === 'string') &&
