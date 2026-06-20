@@ -1,10 +1,10 @@
 import { defineConfig } from 'vitepress';
 
-const SITE_ORIGIN = 'https://opencoworkai.github.io';
-const SITE_BASE = '/open-cowork/';
+const SITE_ORIGIN = 'https://days201.github.io';
+const SITE_BASE = '/mep-lab/';
 const SITE_URL = `${SITE_ORIGIN}${SITE_BASE}`;
 const OG_IMAGE = `${SITE_URL}og-image.png`;
-const GITHUB_URL = 'https://github.com/OpenCoworkAI/open-cowork';
+const GITHUB_URL = 'https://github.com/days201/MEP-lab';
 const RELEASES_URL = `${GITHUB_URL}/releases`;
 const DISCORD_URL = 'https://discord.gg/pynjtQDf';
 const PROJECT_DESCRIPTION =
@@ -17,33 +17,33 @@ const FEATURE_LIST = [
   'MCP integration for browsers, Notion, and other desktop tools',
   'GUI automation through computer use',
   'Remote control through Feishu (Lark) and Slack',
-  'Local-first operation with no Open Cowork telemetry',
+  'Local-first operation with no MEP Lab telemetry',
 ];
 const FAQ_ITEMS = [
   {
-    question: 'What is Open Cowork?',
+    question: 'What is MEP Lab?',
     answer:
-      'Open Cowork is a free, open-source AI agent desktop application for Windows and macOS. It wraps AI models into a user-friendly GUI with one-click installation.',
+      'MEP Lab is a free, open-source AI agent desktop application for Windows and macOS. It wraps AI models into a user-friendly GUI with one-click installation.',
   },
   {
     question: 'What AI models are supported?',
     answer:
-      'Open Cowork supports Claude through Anthropic or OpenRouter, OpenAI-compatible APIs, and models such as Gemini, DeepSeek, GLM, MiniMax, and Kimi.',
+      'MEP Lab supports Claude through Anthropic or OpenRouter, OpenAI-compatible APIs, and models such as Gemini, DeepSeek, GLM, MiniMax, and Kimi.',
   },
   {
-    question: 'Is Open Cowork free?',
+    question: 'Is MEP Lab free?',
     answer:
-      'Yes. Open Cowork is free and open-source under the MIT license. Users pay only for usage from their chosen AI model provider.',
+      'Yes. MEP Lab is free and open-source under the MIT license. Users pay only for usage from their chosen AI model provider.',
   },
   {
     question: 'How does sandbox isolation work?',
     answer:
-      'Open Cowork uses WSL2 on Windows and Lima on macOS to run AI-executed commands inside an isolated Linux VM when available, with path-based workspace restrictions as a baseline.',
+      'MEP Lab uses WSL2 on Windows and Lima on macOS to run AI-executed commands inside an isolated Linux VM when available, with path-based workspace restrictions as a baseline.',
   },
   {
-    question: 'Does Open Cowork send data to its own servers?',
+    question: 'Does MEP Lab send data to its own servers?',
     answer:
-      'No. Open Cowork runs locally. The only external communication is with the AI model API configured by the user.',
+      'No. MEP Lab runs locally. The only external communication is with the AI model API configured by the user.',
   },
 ];
 const STRUCTURED_DATA = {
@@ -52,14 +52,14 @@ const STRUCTURED_DATA = {
     {
       '@type': 'Organization',
       '@id': `${SITE_URL}#organization`,
-      name: 'OpenCoworkAI',
-      url: 'https://github.com/OpenCoworkAI',
-      sameAs: ['https://github.com/OpenCoworkAI', DISCORD_URL],
+      name: 'days201',
+      url: 'https://github.com/days201',
+      sameAs: ['https://github.com/days201', DISCORD_URL],
     },
     {
       '@type': 'WebSite',
       '@id': `${SITE_URL}#website`,
-      name: 'Open Cowork',
+      name: 'MEP Lab',
       url: SITE_URL,
       inLanguage: ['en', 'zh-CN'],
       publisher: { '@id': `${SITE_URL}#organization` },
@@ -67,7 +67,7 @@ const STRUCTURED_DATA = {
     {
       '@type': 'SoftwareApplication',
       '@id': `${SITE_URL}#software`,
-      name: 'Open Cowork',
+      name: 'MEP Lab',
       description: PROJECT_DESCRIPTION,
       url: SITE_URL,
       image: OG_IMAGE,
@@ -100,17 +100,17 @@ const STRUCTURED_DATA = {
 };
 
 export default defineConfig({
-  title: 'Open Cowork',
+  title: 'MEP Lab',
   description:
     'Open-source AI agent desktop app for Windows & macOS — one-click install Claude Code, MCP tools, and Skills with sandbox isolation and multi-model support.',
 
   base: SITE_BASE,
 
   head: [
-    ['link', { rel: 'icon', href: '/open-cowork/logo.png' }],
+    ['link', { rel: 'icon', href: '/mep-lab/logo.png' }],
     [
       'link',
-      { rel: 'alternate', type: 'text/plain', title: 'llms.txt', href: '/open-cowork/llms.txt' },
+      { rel: 'alternate', type: 'text/plain', title: 'llms.txt', href: '/mep-lab/llms.txt' },
     ],
     [
       'link',
@@ -118,7 +118,7 @@ export default defineConfig({
         rel: 'alternate',
         type: 'text/markdown',
         title: 'Full AI context',
-        href: '/open-cowork/llms-full.txt',
+        href: '/mep-lab/llms-full.txt',
       },
     ],
     [
@@ -126,11 +126,11 @@ export default defineConfig({
       {
         rel: 'alternate',
         type: 'application/json',
-        title: 'Open Cowork project metadata',
-        href: '/open-cowork/project.json',
+        title: 'MEP Lab project metadata',
+        href: '/mep-lab/project.json',
       },
     ],
-    ['meta', { name: 'application-name', content: 'Open Cowork' }],
+    ['meta', { name: 'application-name', content: 'MEP Lab' }],
     [
       'meta',
       {
@@ -140,7 +140,7 @@ export default defineConfig({
     ],
     // Open Graph
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:title', content: 'Open Cowork — Open-Source AI Agent Desktop App' }],
+    ['meta', { property: 'og:title', content: 'MEP Lab — Open-Source AI Agent Desktop App' }],
     [
       'meta',
       {
@@ -153,7 +153,7 @@ export default defineConfig({
     ['meta', { property: 'og:url', content: SITE_URL }],
     // Twitter Card
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'Open Cowork — Open-Source AI Agent Desktop App' }],
+    ['meta', { name: 'twitter:title', content: 'MEP Lab — Open-Source AI Agent Desktop App' }],
     [
       'meta',
       {
@@ -169,7 +169,7 @@ export default defineConfig({
       {
         name: 'keywords',
         content:
-          'Open Cowork, AI agent, desktop app, Claude Code, MCP, Skills, sandbox, open source, Windows, macOS, multi-model, PPTX generator, Feishu, Slack',
+          'MEP Lab, AI agent, desktop app, Claude Code, MCP, Skills, sandbox, open source, Windows, macOS, multi-model, PPTX generator, Feishu, Slack',
       },
     ],
     // Schema.org JSON-LD
@@ -183,18 +183,18 @@ export default defineConfig({
 
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Download', link: 'https://github.com/OpenCoworkAI/open-cowork/releases' },
-      { text: 'GitHub', link: 'https://github.com/OpenCoworkAI/open-cowork' },
+      { text: 'Download', link: 'https://github.com/days201/MEP-lab/releases' },
+      { text: 'GitHub', link: 'https://github.com/days201/MEP-lab' },
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/OpenCoworkAI/open-cowork' },
+      { icon: 'github', link: 'https://github.com/days201/MEP-lab' },
       { icon: 'discord', link: 'https://discord.gg/pynjtQDf' },
     ],
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: '© 2025-present OpenCoworkAI',
+      copyright: '© 2025-present days201',
     },
 
     search: { provider: 'local' },
@@ -212,12 +212,12 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: '首页', link: '/zh/' },
-          { text: '下载', link: 'https://github.com/OpenCoworkAI/open-cowork/releases' },
-          { text: 'GitHub', link: 'https://github.com/OpenCoworkAI/open-cowork' },
+          { text: '下载', link: 'https://github.com/days201/MEP-lab/releases' },
+          { text: 'GitHub', link: 'https://github.com/days201/MEP-lab' },
         ],
         footer: {
           message: '基于 MIT 协议开源。',
-          copyright: '© 2025-present OpenCoworkAI',
+          copyright: '© 2025-present days201',
         },
       },
     },

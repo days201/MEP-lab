@@ -1,4 +1,10 @@
 import { createHash } from 'node:crypto';
+import {
+  assertCitedEvidence,
+  buildUnusableBuildingCodeResultMessage,
+  wrapBuildingCodeEvidenceForModel,
+} from '../mcp/building-code/citation';
+import type { BuildingCodeEvidence } from '../mcp/building-code/types';
 
 type ToolResultImage = {
   data: string;
@@ -91,11 +97,11 @@ function summarizeStructuredToolPart(part: unknown): string | null {
 }
 
 function extractImagesFromDetails(details: unknown): ToolResultImage[] {
-  if (!isRecord(details) || !Array.isArray(details.openCoworkImages)) {
+  if (!isRecord(details) || !Array.isArray(details.mepLabImages)) {
     return [];
   }
 
-  return details.openCoworkImages.flatMap((image) =>
+  return details.mepLabImages.flatMap((image) =>
     isToolResultImage(image) ? [{ data: image.data, mimeType: image.mimeType }] : []
   );
 }
@@ -152,37 +158,76 @@ function finalizeText(textParts: string[], imageCount: number): string {
   return '(no output)';
 }
 
-export function normalizeMcpToolResultForModel(result: unknown): NormalizedToolTextResult {
+function isBuildingCodeToolName(toolName: string | undefined): boolean {
+  return typeof toolName === 'string' && toolName.startsWith('mcp__Building_Code__');
+}
+
+function normalizeBuildingCodeResultText(rawText: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    return buildUnusableBuildingCodeResultMessage('tool result was not valid JSON');
+  }
+
+  if (!isRecord(parsed) || !Array.isArray(parsed.results)) {
+    return buildUnusableBuildingCodeResultMessage(
+      'tool result did not include canonical cited evidence results'
+    );
+  }
+
+  try {
+    for (const result of parsed.results) {
+      assertCitedEvidence(result);
+    }
+    return wrapBuildingCodeEvidenceForModel(parsed.results as BuildingCodeEvidence[]);
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    return buildUnusableBuildingCodeResultMessage(details);
+  }
+}
+
+export function normalizeMcpToolResultForModel(
+  result: unknown,
+  toolName?: string
+): NormalizedToolTextResult {
   const resultObj = isRecord(result) ? result : null;
   if (resultObj?.content) {
     const { textParts, images } = extractTextAndImagesFromContent(resultObj.content);
+    const text = finalizeText(textParts, images.length);
     return {
-      text: finalizeText(textParts, images.length),
+      text: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(text) : text,
       images,
     };
   }
 
+  const text = typeof result === 'string' ? result : safeStringifyToolResult(result);
   return {
-    text: typeof result === 'string' ? result : safeStringifyToolResult(result),
+    text: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(text) : text,
     images: [],
   };
 }
 
-export function normalizeToolExecutionResultForUi(result: unknown): NormalizedToolExecutionResult {
+export function normalizeToolExecutionResultForUi(
+  result: unknown,
+  toolName?: string
+): NormalizedToolExecutionResult {
   const resultObj = isRecord(result) ? result : null;
   const detailImages = extractImagesFromDetails(resultObj?.details);
 
   if (resultObj?.content) {
     const { textParts, images: inlineImages } = extractTextAndImagesFromContent(resultObj.content);
     const images = dedupeImages([...inlineImages, ...detailImages]);
+    const content = finalizeText(textParts, images.length);
     return {
-      content: finalizeText(textParts, images.length),
+      content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
       images,
     };
   }
 
+  const content = typeof result === 'string' ? result : safeStringifyToolResult(result);
   return {
-    content: typeof result === 'string' ? result : safeStringifyToolResult(result),
+    content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
     images: dedupeImages(detailImages),
   };
 }

@@ -7,9 +7,9 @@
 
 set -euo pipefail
 
-APP_NAME="Open Cowork"
+APP_NAME="MEP Lab"
 APP_PATH="/Applications/${APP_NAME}.app"
-ARTIFACT_NAME="open-cowork-macos"
+ARTIFACT_NAME="mep-lab-macos"
 
 NO_WAIT=false
 for arg in "$@"; do

@@ -1,7 +1,7 @@
 import type { CodeCrossReferenceRecord, CodeNodeRecord } from './types';
 
 const referencePattern =
-  /\b(Section\s+\d+(?:\.\d+)*|Table\s+\d+(?:\.\d+)*|Figure\s+\d+(?:\.\d+)*|Appendix\s+[A-Z])\b/gi;
+  /\b(Section\s+\d+(?:\.\d+)*(?:\.(?=\.))?|Article\s+\d+(?:\.\d+)*(?:\.(?=\.))?|Sentence\s+\d+(?:\.\d+)*(?:\.\(\d+\))?|Subsection\s+\d+(?:\.\d+)*(?:\.(?=\.))?|Part\s+\d+|Chapter\s+\d+|Table\s+\d+(?:\.\d+)*(?:\.(?=\.))?|Figure\s+\d+(?:\.\d+)*(?:\.(?=\.))?|Appendix\s+[A-Z]|Note\s+[A-Z]-\d+(?:\.\d+)*(?:\.(?=\.))?)(?=\W|$)/gi;
 
 export function resolveCrossReferences(nodes: CodeNodeRecord[]): CodeCrossReferenceRecord[] {
   const nodesByLogicalRef = new Map(nodes.map((node) => [node.logicalRef, node]));
@@ -37,11 +37,28 @@ export function resolveCrossReferences(nodes: CodeNodeRecord[]): CodeCrossRefere
 }
 
 function normalizeLogicalRef(rawLogicalRef: string): string {
-  return rawLogicalRef
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/^section\b/i, 'Section')
-    .replace(/^table\b/i, 'Table')
-    .replace(/^figure\b/i, 'Figure')
-    .replace(/^appendix\b/i, 'Appendix');
+  const normalized = rawLogicalRef.trim().replace(/\s+/g, ' ');
+  const match = normalized.match(/^([A-Za-z]+)\s+(.+)$/);
+  if (!match) {
+    return normalized.replace(/\.$/, '');
+  }
+  const prefix = canonicalPrefix(match[1]);
+  return `${prefix} ${match[2].replace(/\.$/, '')}`;
+}
+
+function canonicalPrefix(prefix: string): string {
+  const lower = prefix.toLowerCase();
+  const known: Record<string, string> = {
+    section: 'Section',
+    article: 'Article',
+    sentence: 'Sentence',
+    subsection: 'Subsection',
+    part: 'Part',
+    chapter: 'Chapter',
+    table: 'Table',
+    figure: 'Figure',
+    appendix: 'Appendix',
+    note: 'Note',
+  };
+  return known[lower] ?? prefix;
 }

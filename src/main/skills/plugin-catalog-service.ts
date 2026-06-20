@@ -7,7 +7,7 @@ interface CachedCatalog {
 
 const CLAUDE_PLUGINS_URL = 'https://claude.com/plugins';
 const CACHE_TTL_MS = 60_000;
-const DEFAULT_USER_AGENT = 'open-cowork-plugin-catalog/3.0';
+const DEFAULT_USER_AGENT = 'mep-lab-plugin-catalog/3.0';
 const DETAIL_FETCH_CONCURRENCY = 8;
 
 const EMPTY_COUNTS: PluginComponentCounts = {

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   ClientEvent,
   ServerEvent,
@@ -38,6 +38,7 @@ import type {
   PairedUser,
   PairingRequest,
   RemoteSessionMapping,
+  KnowledgeBaseOverview,
 } from '../shared/ipc-types';
 
 // Track registered callbacks to prevent duplicate listeners
@@ -438,6 +439,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setEnabled: (enabled: boolean): Promise<{ success: boolean; enabled: boolean }> =>
       ipcRenderer.invoke('memory.setEnabled', enabled),
   },
+
+  knowledgeBase: {
+    getOverview: (): Promise<KnowledgeBaseOverview> =>
+      ipcRenderer.invoke('knowledgeBase.getOverview'),
+    selectDocuments: (): Promise<string[]> => ipcRenderer.invoke('knowledgeBase.selectDocuments'),
+    getDroppedFilePaths: (files: File[]): string[] =>
+      Array.from(files)
+        .map((file) => webUtils.getPathForFile(file))
+        .filter((filePath): filePath is string => Boolean(filePath)),
+    uploadDocuments: (filePaths: string[]): Promise<KnowledgeBaseOverview> =>
+      ipcRenderer.invoke('knowledgeBase.uploadDocuments', filePaths),
+    reparseDocument: (documentId: string): Promise<KnowledgeBaseOverview> =>
+      ipcRenderer.invoke('knowledgeBase.reparseDocument', documentId),
+    removeDocument: (documentId: string): Promise<KnowledgeBaseOverview> =>
+      ipcRenderer.invoke('knowledgeBase.removeDocument', documentId),
+    revealSource: (documentId: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('knowledgeBase.revealSource', documentId),
+  },
 });
 
 // Type declaration for the renderer process
@@ -673,6 +692,15 @@ declare global {
           workspaceKey?: string
         ) => Promise<MemoryInspectSessionResult | null>;
         setEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled: boolean }>;
+      };
+      knowledgeBase: {
+        getOverview: () => Promise<KnowledgeBaseOverview>;
+        selectDocuments: () => Promise<string[]>;
+        getDroppedFilePaths: (files: File[]) => string[];
+        uploadDocuments: (filePaths: string[]) => Promise<KnowledgeBaseOverview>;
+        reparseDocument: (documentId: string) => Promise<KnowledgeBaseOverview>;
+        removeDocument: (documentId: string) => Promise<KnowledgeBaseOverview>;
+        revealSource: (documentId: string) => Promise<{ success: boolean; error?: string }>;
       };
     };
   }

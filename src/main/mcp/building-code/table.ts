@@ -1,4 +1,6 @@
 import { buildCitation, stableRecordId } from './hierarchy';
+import { detectBuildingCodeHeading } from './heading-detector';
+import type { NormalizedDoclingTable } from './docling-parser';
 import type { CodeCitation, CodeNodeRecord, CodeSourceRecord, CodeTableRecord } from './types';
 
 export function extractMarkdownTables(
@@ -41,6 +43,86 @@ export function extractMarkdownTables(
         })),
       };
     });
+}
+
+export function buildStructuredTables(
+  nodes: CodeNodeRecord[],
+  doclingTables: NormalizedDoclingTable[],
+  source: CodeSourceRecord
+): CodeTableRecord[] {
+  const tables: CodeTableRecord[] = [];
+  const matchedNodeIds = new Set<string>();
+  for (const doclingTable of doclingTables) {
+    const node = findStructuredTableNode(nodes, doclingTable);
+    if (!node) {
+      continue;
+    }
+    const citation = buildCitation(source, node);
+    const tableId = stableRecordId('table', [
+      source.sourceChecksum,
+      node.nodeId,
+      doclingTable.elementId,
+    ]);
+    node.tableId = tableId;
+    if (!node.parser.sourceElementIds.includes(doclingTable.elementId)) {
+      node.parser.sourceElementIds.push(doclingTable.elementId);
+    }
+    matchedNodeIds.add(node.nodeId);
+    tables.push({
+      tableId,
+      nodeId: node.nodeId,
+      caption: doclingTable.caption,
+      columns: doclingTable.columns,
+      rows: doclingTable.rows.map((cells, index) => ({
+        rowId: stableRecordId('table-row', [
+          source.sourceChecksum,
+          node.nodeId,
+          String(index),
+          cells.join('|'),
+        ]),
+        cells,
+        citation: citationForTablePart(citation, 'table-row', String(index), cells.join('|')),
+      })),
+      notes: doclingTable.notes.map((text, index) => ({
+        noteId: stableRecordId('table-note', [
+          source.sourceChecksum,
+          node.nodeId,
+          String(index),
+          text,
+        ]),
+        text,
+        citation: citationForTablePart(citation, 'table-note', String(index), text),
+      })),
+    });
+  }
+  const unmatchedMarkdownTables = extractMarkdownTables(
+    nodes.filter((node) => node.nodeType === 'table' && !matchedNodeIds.has(node.nodeId)),
+    source
+  );
+  return [...tables, ...unmatchedMarkdownTables];
+}
+
+function findStructuredTableNode(
+  nodes: CodeNodeRecord[],
+  doclingTable: NormalizedDoclingTable
+): CodeNodeRecord | undefined {
+  const sourceElementMatch = nodes.find(
+    (candidate) =>
+      candidate.nodeType === 'table' &&
+      candidate.parser.sourceElementIds.includes(doclingTable.elementId)
+  );
+  if (sourceElementMatch) {
+    return sourceElementMatch;
+  }
+
+  const heading = detectBuildingCodeHeading(doclingTable.caption);
+  if (!heading || heading.nodeType !== 'table') {
+    return undefined;
+  }
+
+  return nodes.find(
+    (candidate) => candidate.nodeType === 'table' && candidate.logicalRef === heading.logicalRef
+  );
 }
 
 function parseTableText(text: string): {

@@ -19,7 +19,8 @@ import { createHash } from 'crypto';
 import { app, BrowserWindow, shell } from 'electron';
 
 import path from 'path';
-import { connectWithOAuthRetry, OpenCoworkMcpOAuthProvider } from './mcp-oauth';
+import { connectWithOAuthRetry, MepLabMcpOAuthProvider } from './mcp-oauth';
+import { resolveMcpServerRuntimeConfig } from './mcp-config-store';
 import { log, logError, logWarn, logCtx, logCtxError, logTiming } from '../utils/logger';
 import { getDefaultShell } from '../utils/shell-resolver';
 
@@ -225,7 +226,7 @@ export class MCPManager {
   private transports: Map<string, MCPTransport> = new Map();
   private tools: Map<string, MCPTool> = new Map(); // toolName -> MCPTool
   private serverConfigs: Map<string, MCPServerConfig> = new Map();
-  private oauthProviders: Map<string, { provider: OpenCoworkMcpOAuthProvider; serverUrl: string }> =
+  private oauthProviders: Map<string, { provider: MepLabMcpOAuthProvider; serverUrl: string }> =
     new Map();
   private npxPath: string | null = null; // Cached npx path
   // Fingerprint of last initialized config to skip redundant re-init
@@ -307,9 +308,8 @@ export class MCPManager {
     if (!bundledNode) {
       const errorMessage =
         'Bundled Node.js not found. Please reinstall the application.\n' +
-        '未找到内置的 Node.js。请重新安装应用。\n\n' +
-        'The application requires bundled Node.js to run MCP servers.\n' +
-        '应用需要内置的 Node.js 来运行 MCP 服务器。';
+        '\n' +
+        'The app needs bundled Node.js to run MCP servers.';
 
       logError('[MCPManager] Bundled Node.js not found');
       throw new Error(errorMessage);
@@ -331,7 +331,7 @@ export class MCPManager {
       );
       if (!preferredNpxPath) {
         throw new Error(
-          'npx is not available. Install Node.js so Open Cowork can use your system npx.cmd, or reinstall the app to restore the bundled runtime.'
+          'npx is not available. Install Node.js so MEP Lab can use your system npx.cmd, or reinstall the app to restore the bundled runtime.'
         );
       }
 
@@ -589,6 +589,7 @@ export class MCPManager {
    * This is more efficient than reinitializing all servers
    */
   async updateServer(config: MCPServerConfig): Promise<void> {
+    config = resolveMcpServerRuntimeConfig(config);
     // Defer if initialization is in progress to avoid races
     if (this.initializingServers) {
       log('[MCPManager] Deferring update during initialization');
@@ -677,9 +678,7 @@ export class MCPManager {
       }
     }
 
-    // Development: __dirname is dist-electron/main
-    // Need to go up 2 levels to get to project root (dist-electron/main -> dist-electron -> project root)
-    const projectRoot = path.join(__dirname, '..', '..');
+    const projectRoot = this.getProjectRoot();
 
     // Prefer bundled JS from dist-mcp in development.
     // This avoids running TypeScript directly with `node` (which will fail without a TS loader).
@@ -729,6 +728,34 @@ export class MCPManager {
   }
 
   /**
+   * Get the path to the Building Code MCP server file
+   */
+  private getBuildingCodeServerPath(): string {
+    return this.getMcpServerPath('building-code-server.ts');
+  }
+
+  private getProjectRoot(): string {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    const candidates = [
+      path.join(__dirname, '..', '..'),
+      path.join(__dirname, '..', '..', '..'),
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(path.join(candidate, 'package.json'))) {
+          return candidate;
+        }
+      } catch {
+        // Try the next candidate.
+      }
+    }
+
+    return path.join(__dirname, '..', '..');
+  }
+
+  /**
    * Connect to a single MCP server
    */
   private async connectServer(config: MCPServerConfig): Promise<void> {
@@ -751,6 +778,7 @@ export class MCPManager {
    * connectionStatus is always set to 'connected' or 'failed'.
    */
   private async connectServerInternal(config: MCPServerConfig): Promise<void> {
+    config = resolveMcpServerRuntimeConfig(config);
     let transport: MCPTransport;
     let commandForLogging = '';
     let argsForLogging: string[] = [];
@@ -761,7 +789,7 @@ export class MCPManager {
     // and the authenticated reconnect.
     const client = new Client(
       {
-        name: 'open-cowork',
+        name: 'mep-lab',
         version: '0.1.0',
       },
       {
@@ -783,7 +811,9 @@ export class MCPManager {
         config.name === 'GUI_Operate' ||
         config.name === 'GUI Operate' ||
         config.name === 'Software_Development' ||
-        config.name === 'Software Development';
+        config.name === 'Software Development' ||
+        config.name === 'Building_Code' ||
+        config.name === 'Building Code';
       const isOldConfig =
         (command === 'npx' || command.endsWith('/npx')) &&
         args.includes('-y') &&
@@ -810,6 +840,10 @@ export class MCPManager {
         // GUI Operate server path
         if (arg === '{GUI_OPERATE_SERVER_PATH}') {
           return this.getGuiOperateServerPath();
+        }
+        // Building Code server path
+        if (arg === '{BUILDING_CODE_SERVER_PATH}') {
+          return this.getBuildingCodeServerPath();
         }
         return arg;
       });
@@ -1121,7 +1155,7 @@ export class MCPManager {
 
   private getOrCreateStreamableHttpOAuthProvider(
     config: MCPServerConfig
-  ): OpenCoworkMcpOAuthProvider {
+  ): MepLabMcpOAuthProvider {
     if (!config.url) {
       throw new Error(`Streamable HTTP server ${config.name} requires a URL`);
     }
@@ -1131,7 +1165,7 @@ export class MCPManager {
       return existing.provider;
     }
 
-    const provider = new OpenCoworkMcpOAuthProvider({
+    const provider = new MepLabMcpOAuthProvider({
       openExternal: async (url) => {
         await this.openMcpAuthorizationUrl(config.name, url);
       },
@@ -1269,7 +1303,7 @@ export class MCPManager {
         logError(`[MCPManager]   1. Chrome failed to start`);
         logError(`[MCPManager]   2. Another process is using port 9222`);
         logError(`[MCPManager]   3. Firewall blocking the port`);
-        throw new Error('Chrome 浏览器未就绪，无法执行此操作: debug port did not become ready');
+        throw new Error('Chrome is not ready, so this action cannot be performed: debug port did not become ready');
       }
 
       log(`[MCPManager] ✓ Chrome debug port is now ready`);
@@ -1298,7 +1332,7 @@ export class MCPManager {
             logError(`[MCPManager] Last error code: ${ve.code}, message: ${ve.message}`);
             logError(`[MCPManager] The chrome-devtools-mcp server may not be working correctly`);
             throw new Error(
-              'Chrome 浏览器未就绪，无法执行此操作: MCP connection verification failed after 5 attempts'
+              'Chrome is not ready, so this action cannot be performed: MCP connection verification failed after 5 attempts'
             );
           }
         }
@@ -1307,7 +1341,7 @@ export class MCPManager {
       logError(`[MCPManager] ❌ Failed to start Chrome with debugging`);
       const startErrMsg = startError instanceof Error ? startError.message : String(startError);
       logError(`[MCPManager] Error: ${startErrMsg}`);
-      throw new Error(`Chrome 浏览器未就绪，无法执行此操作: ${startErrMsg}`);
+      throw new Error(`Chrome is not ready, so this action cannot be performed: ${startErrMsg}`);
     }
   }
 

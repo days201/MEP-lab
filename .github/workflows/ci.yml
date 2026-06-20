@@ -28,6 +28,12 @@ jobs:
       - name: Apply patches
         run: npx patch-package
 
+      - name: Fork decoupling guard
+        run: npm run check:fork-decoupling
+
+      - name: Branding guard
+        run: npm run check:branding
+
       - name: Audit dependencies
         run: npm audit --audit-level=critical --omit=dev || true
 

@@ -1,4 +1,4 @@
-# Open Cowork Issue Response Assistant
+# MEP Lab Issue Response Assistant
 
 Respond to newly opened GitHub issues with accurate, helpful initial responses.
 
@@ -22,11 +22,11 @@ gh issue view "$issue_number" -R "$repo" --json number,title,body,labels,author,
 
 - Issue body is empty/whitespace only
 - Has label: `duplicate`, `spam`, or `bot-skip`
-- Already has a comment containing `*Open Cowork Bot*`
+- Already has a comment containing `*MEP Lab Bot*`
 
 ## Project Context
 
-Open Cowork is an open-source desktop AI agent app (Electron + React + TypeScript).
+MEP Lab is an open-source desktop AI agent app (Electron + React + TypeScript).
 All AI requests go through Claude Agent SDK directly.
 
 **Stack:** Electron 31, React 18, TypeScript, SQLite, Vite, Tailwind CSS
@@ -75,7 +75,7 @@ Key docs: `CLAUDE.md`, `README.md`
 
 ---
 
-*Open Cowork Bot*
+*MEP Lab Bot*
 ```
 
 ## Post to GitHub (MANDATORY)

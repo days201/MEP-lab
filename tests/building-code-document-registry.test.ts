@@ -1,0 +1,138 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DocumentRegistry } from '../src/main/mcp/building-code/document-registry';
+import type { KnowledgeBaseDocumentRecord } from '../src/shared/ipc-types';
+
+const roots: string[] = [];
+
+function record(overrides: Partial<KnowledgeBaseDocumentRecord> = {}): KnowledgeBaseDocumentRecord {
+  return {
+    documentId: 'doc-1',
+    originalFilename: 'NBC.pdf',
+    detectedFileType: 'pdf',
+    mimeType: 'application/pdf',
+    sourceChecksum: 'sha256:abc',
+    sourcePath: '/tmp/NBC.pdf',
+    sourceUri: 'kb://building-code/doc-1/NBC.pdf',
+    parserName: 'docling',
+    parserVersion: '2.0.0',
+    status: 'queued',
+    uploadedAt: '2026-06-19T12:00:00.000Z',
+    parseStartedAt: null,
+    parseCompletedAt: null,
+    lastIndexRebuildAt: null,
+    metadata: {
+      codeFamily: 'NBC',
+      edition: '2025',
+      jurisdictionScope: 'Canada',
+      sourceTitle: 'NBC 2025',
+    },
+    diagnostics: [],
+    failureMessage: null,
+    indexSummary: {
+      nodeCount: 0,
+      tableCount: 0,
+      chunkCount: 0,
+      resolvedReferenceCount: 0,
+      unresolvedReferenceCount: 0,
+      sectionCount: 0,
+      semanticSearchAvailable: false,
+    },
+    ...overrides,
+  };
+}
+
+describe('building-code document registry', () => {
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('creates an empty registry when documents.json is absent', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registry = new DocumentRegistry(path.join(root, 'documents.json'));
+
+    await expect(registry.list()).resolves.toEqual([]);
+  });
+
+  it('upserts and persists document records atomically', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registryPath = path.join(root, 'documents.json');
+    const registry = new DocumentRegistry(registryPath);
+
+    await registry.upsert(record());
+    await registry.upsert(record({ status: 'ready', parseCompletedAt: '2026-06-19T12:01:00.000Z' }));
+
+    expect(JSON.parse(fs.readFileSync(registryPath, 'utf8'))).toMatchObject({
+      version: 1,
+      documents: [expect.objectContaining({ documentId: 'doc-1', status: 'ready' })],
+    });
+
+    const reloaded = new DocumentRegistry(registryPath);
+    expect(await reloaded.get('doc-1')).toMatchObject({ status: 'ready' });
+  });
+
+  it('preserves concurrent unique upserts from the same registry instance', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registry = new DocumentRegistry(path.join(root, 'documents.json'));
+    const documents = Array.from({ length: 50 }, (_, index) =>
+      record({
+        documentId: `doc-${index}`,
+        originalFilename: `NBC-${index}.pdf`,
+        sourceChecksum: `sha256:${index}`,
+        sourcePath: `/tmp/NBC-${index}.pdf`,
+        sourceUri: `kb://building-code/doc-${index}/NBC-${index}.pdf`,
+      })
+    );
+
+    const results = await Promise.allSettled(documents.map((document) => registry.upsert(document)));
+
+    const persisted = await registry.list();
+    expect(results.filter((result) => result.status === 'rejected')).toEqual([]);
+    expect(persisted).toHaveLength(documents.length);
+    expect(persisted.map((document) => document.documentId).sort()).toEqual(
+      documents.map((document) => document.documentId).sort()
+    );
+  });
+
+  it('rejects unsupported registry versions', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registryPath = path.join(root, 'documents.json');
+    fs.writeFileSync(registryPath, JSON.stringify({ version: 2, documents: [] }), 'utf8');
+    const registry = new DocumentRegistry(registryPath);
+
+    await expect(registry.list()).rejects.toThrow('Unsupported knowledge-base document registry version');
+  });
+
+  it('rejects malformed v1 document arrays', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registryPath = path.join(root, 'documents.json');
+    fs.writeFileSync(registryPath, JSON.stringify({ version: 1, documents: {} }), 'utf8');
+    const registry = new DocumentRegistry(registryPath);
+
+    await expect(registry.list()).rejects.toThrow('Malformed knowledge-base document registry documents');
+  });
+
+  it('marks removed documents without deleting their audit record', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registry = new DocumentRegistry(path.join(root, 'documents.json'));
+
+    await registry.upsert(record());
+    await registry.markRemoved('doc-1', '2026-06-19T12:02:00.000Z');
+
+    expect(await registry.get('doc-1')).toMatchObject({
+      status: 'removed',
+      lastIndexRebuildAt: '2026-06-19T12:02:00.000Z',
+      failureMessage: null,
+    });
+  });
+});

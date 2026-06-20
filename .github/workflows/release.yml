@@ -26,6 +26,12 @@ jobs:
       - name: Apply patches
         run: npx patch-package
 
+      - name: Fork decoupling guard
+        run: npm run check:fork-decoupling
+
+      - name: Branding guard
+        run: npm run check:branding
+
       - name: Build native modules for tests
         run: npm rebuild better-sqlite3
 

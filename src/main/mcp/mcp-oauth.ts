@@ -35,13 +35,13 @@ interface OAuthProviderOptions {
 interface ConnectWithOAuthOptions<TTransport extends OAuthTransport> {
   callbackTimeoutMs?: number;
   connect: (transport: TTransport) => Promise<void>;
-  createTransport: (provider: OpenCoworkMcpOAuthProvider) => TTransport;
-  provider: OpenCoworkMcpOAuthProvider;
+  createTransport: (provider: MepLabMcpOAuthProvider) => TTransport;
+  provider: MepLabMcpOAuthProvider;
 }
 
 function buildClientMetadata(redirectUrl: string): OAuthClientMetadata {
   return {
-    client_name: 'Open Cowork MCP Connector',
+    client_name: 'MEP Lab MCP Connector',
     grant_types: ['authorization_code', 'refresh_token'],
     logo_uri: undefined,
     redirect_uris: [redirectUrl],
@@ -75,7 +75,7 @@ async function safeCloseTransport(transport: OAuthTransport): Promise<void> {
   }
 }
 
-export class OpenCoworkMcpOAuthProvider implements OAuthClientProvider {
+export class MepLabMcpOAuthProvider implements OAuthClientProvider {
   clientMetadataUrl?: string;
 
   private _clientInformation?: OAuthClientInformationMixed;
@@ -209,7 +209,7 @@ export async function createOAuthCallbackListener(
       settled = true;
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       response.end(
-        '<html><body><h1>Authorization complete</h1><p>You can return to Open Cowork now.</p><script>setTimeout(() => window.close(), 1200);</script></body></html>'
+        '<html><body><h1>Authorization complete</h1><p>You can return to MEP Lab now.</p><script>setTimeout(() => window.close(), 1200);</script></body></html>'
       );
       resolveCode(authorizationCode);
       void closeServer(server);

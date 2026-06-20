@@ -1,6 +1,6 @@
-appId: com.opencowork.app
-productName: Open Cowork
-copyright: Copyright © 2026 Open Cowork Team
+appId: com.meplab.app
+productName: MEP Lab
+copyright: Copyright © 2026 MEP Lab Team
 
 directories:
   output: release
@@ -75,6 +75,8 @@ win:
       to: node
     - from: resources/node/win32-x64/node_modules/npm
       to: node/node_modules/npm
+    - from: resources/python/win32-x64
+      to: python
     - from: dist-wsl-agent
       to: wsl-agent
     - from: .claude/skills
@@ -96,8 +98,8 @@ mac:
   entitlementsInherit: resources/entitlements.mac.plist
   extendInfo:
     LSApplicationCategoryType: public.app-category.developer-tools
-    NSScreenCaptureUsageDescription: 'Open Cowork needs screen recording access for GUI automation.'
-    NSAccessibilityUsageDescription: 'Open Cowork needs accessibility access for GUI automation.'
+    NSScreenCaptureUsageDescription: 'MEP Lab needs screen recording access for GUI automation.'
+    NSAccessibilityUsageDescription: 'MEP Lab needs accessibility access for GUI automation.'
   extraResources:
     - from: .bundle-resources/mcp
       to: mcp
@@ -105,7 +107,7 @@ mac:
       to: node
     - from: resources/node/darwin-${arch}/lib/node_modules/npm
       to: node/lib/node_modules/npm
-    # Bundled Python runtime + site-packages for GUI automation helpers (Pillow, pyobjc/Quartz)
+    # Bundled Python runtime + site-packages for GUI automation and Knowledge Base parsing
     - from: resources/python/darwin-${arch}
       to: python
     # Bundled GUI helper tools (e.g. cliclick) to avoid relying on user-installed Homebrew tools
@@ -159,7 +161,7 @@ dmg:
   contents:
     - x: 150
       y: 220
-      name: 'Open Cowork.app'
+      name: 'MEP Lab.app'
     - x: 450
       y: 220
       type: link
@@ -171,5 +173,5 @@ extraMetadata:
 
 publish:
   provider: github
-  owner: OpenCoworkAI
-  repo: open-cowork
+  owner: days201
+  repo: MEP-lab

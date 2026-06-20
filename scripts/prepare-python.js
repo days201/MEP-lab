@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Prepare a bundled Python runtime for Open Cowork (macOS/Linux).
+ * Prepare a bundled Python runtime for MEP Lab (macOS/Linux/Windows).
  *
  * Goal:
  * - Bundle a standalone python3 into `resources/python/darwin-{arch}/`
  * - Preinstall required packages into `resources/python/darwin-{arch}/site-packages/`
  *   - Pillow (PIL)
  *   - pyobjc-framework-Quartz (import Quartz)
+ *   - Docling for Knowledge Base document parsing
  *
  * Runtime code (gui-operate-server) will prefer the bundled Python and add
  * `${pythonRoot}/site-packages` to PYTHONPATH.
@@ -39,11 +40,12 @@ const ABI = `cp${PYTHON_MINOR.replace('.', '')}`; // e.g. 3.12 -> cp312
 
 const GITHUB_REPO = process.env.OPEN_COWORK_PYTHON_STANDALONE_REPO || 'astral-sh/python-build-standalone';
 const RUNTIME_VERSION_FILENAME = 'runtime-version.txt';
-const BUNDLED_GUI_PACKAGES = [
+const BUNDLED_PYTHON_PACKAGES = [
   'pillow',
   'pyobjc-framework-Quartz',
+  'docling',
 ];
-const BUNDLED_RUNTIME_FINGERPRINT = BUNDLED_GUI_PACKAGES.join('|');
+const BUNDLED_RUNTIME_FINGERPRINT = BUNDLED_PYTHON_PACKAGES.join('|');
 // Use the correct GitHub API endpoint (v3, no trailing slash)
 const RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=30`;
 
@@ -76,6 +78,13 @@ const TARGETS = {
       envUrlKey: 'OPEN_COWORK_PYTHON_STANDALONE_URL_LINUX_X64',
     },
   },
+  win32: {
+    x64: {
+      triple: 'x86_64-pc-windows-msvc',
+      platformTag: 'win_amd64',
+      envUrlKey: 'OPEN_COWORK_PYTHON_STANDALONE_URL_WIN32_X64',
+    },
+  },
 };
 
 function exists(p) {
@@ -104,7 +113,7 @@ function download(url, dest) {
       url,
       {
         headers: {
-          'User-Agent': 'open-cowork-build-script',
+          'User-Agent': 'mep-lab-build-script',
           Accept: '*/*',
         },
       },
@@ -146,7 +155,7 @@ function fetchJson(url) {
       url,
       {
         headers: {
-          'User-Agent': 'open-cowork-build-script',
+          'User-Agent': 'mep-lab-build-script',
           Accept: 'application/vnd.github+json',
         },
       },
@@ -286,20 +295,44 @@ async function findStandaloneAssetUrl(triple, envUrlKey) {
   }
 }
 
-function getStripComponentsForArchive(archivePath) {
+function packagesForPlatform(platform) {
+  if (platform === 'win32') {
+    return BUNDLED_PYTHON_PACKAGES.filter((pkg) => !pkg.startsWith('pyobjc'));
+  }
+  return BUNDLED_PYTHON_PACKAGES;
+}
+
+function runtimeFingerprintForPlatform(platform) {
+  return packagesForPlatform(platform).join('|');
+}
+
+function resolvePythonBin(destDir, platform) {
+  return platform === 'win32'
+    ? path.join(destDir, 'python.exe')
+    : path.join(destDir, 'bin', 'python3');
+}
+
+function getStripComponentsForArchive(archivePath, platform) {
   const isZst = archivePath.endsWith('.tar.zst');
   const listCmd = isZst ? `tar --zstd -tf "${archivePath}"` : `tar -tzf "${archivePath}"`;
   const list = execSync(listCmd, { encoding: 'utf8' }).split('\n');
-  const python3Entry = list.find((p) => p.endsWith('/bin/python3'));
-  if (!python3Entry) {
-    throw new Error(`Could not locate bin/python3 in archive: ${archivePath}`);
+  const pythonEntry =
+    platform === 'win32'
+      ? list.find((entry) => /(?:^|\/)python\.exe$/i.test(entry.replace(/\\/g, '/')))
+      : list.find((entry) => entry.endsWith('/bin/python3'));
+  if (!pythonEntry) {
+    throw new Error(`Could not locate bundled Python executable in archive: ${archivePath}`);
   }
-  const prefix = python3Entry.replace(/\/bin\/python3$/, '').replace(/\/$/, '');
+  const normalized = pythonEntry.replace(/\\/g, '/');
+  const prefix =
+    platform === 'win32'
+      ? normalized.replace(/\/python\.exe$/i, '').replace(/\/$/, '')
+      : normalized.replace(/\/bin\/python3$/, '').replace(/\/$/, '');
   const parts = prefix.split('/').filter(Boolean);
   return parts.length;
 }
 
-function extractArchive(archivePath, destDir) {
+function extractArchive(archivePath, destDir, platform) {
   ensureDir(destDir);
   // Clean destination to avoid mixing different versions
   for (const entry of fs.readdirSync(destDir)) {
@@ -307,7 +340,7 @@ function extractArchive(archivePath, destDir) {
   }
 
   const isZst = archivePath.endsWith('.tar.zst');
-  const strip = getStripComponentsForArchive(archivePath);
+  const strip = getStripComponentsForArchive(archivePath, platform);
   const extractCmd = isZst
     ? `tar --zstd -xf "${archivePath}" -C "${destDir}" --strip-components=${strip}`
     : `tar -xzf "${archivePath}" -C "${destDir}" --strip-components=${strip}`;
@@ -323,11 +356,12 @@ function ensurePipAvailable(pythonBin) {
   }
 }
 
-function installPackages(siteDir, platformTag, pythonBin) {
+function installPackages(siteDir, platformTag, pythonBin, platform) {
   ensureDir(siteDir);
 
   const pipPython = process.env.OPEN_COWORK_PIP_PYTHON || pythonBin;
-  const packageSpecs = [...BUNDLED_GUI_PACKAGES];
+  const packageSpecs = packagesForPlatform(platform);
+  const runtimeFingerprint = runtimeFingerprintForPlatform(platform);
   const pythonRoot = path.resolve(siteDir, '..');
   const runtimeMarkerFile = resolveRuntimeVersionFile(pythonRoot);
   const runtimeMarker = exists(runtimeMarkerFile)
@@ -336,8 +370,9 @@ function installPackages(siteDir, platformTag, pythonBin) {
 
   // Avoid re-install if already present
   const hasPillow = exists(path.join(siteDir, 'PIL'));
-  const hasQuartz = exists(path.join(siteDir, 'Quartz'));
-  if (hasPillow && hasQuartz && runtimeMarker === BUNDLED_RUNTIME_FINGERPRINT) {
+  const hasQuartz = platform === 'win32' ? true : exists(path.join(siteDir, 'Quartz'));
+  const hasDocling = exists(path.join(siteDir, 'docling'));
+  if (hasPillow && hasQuartz && hasDocling && runtimeMarker === runtimeFingerprint) {
     console.log(`✓ Python packages already present in ${siteDir}`);
     return;
   }
@@ -345,7 +380,8 @@ function installPackages(siteDir, platformTag, pythonBin) {
   console.log(`📦 Installing Python packages into ${siteDir} (platform=${platformTag})...`);
   ensurePipAvailable(pipPython);
 
-  // Install wheels into a target directory (no need to run the bundled python)
+  // Install wheels into a target directory (no need to run the bundled python).
+  // Pip surfaces missing Docling binary wheels as a hard build failure.
   // NOTE: requires network access and a working pip on the build machine.
   const cmd =
     `${JSON.stringify(pipPython)} -m pip install --upgrade --no-input --only-binary=:all: ` +
@@ -354,7 +390,7 @@ function installPackages(siteDir, platformTag, pythonBin) {
     `${packageSpecs.map((pkg) => JSON.stringify(pkg)).join(' ')}`;
 
   execSync(cmd, { stdio: 'inherit' });
-  fs.writeFileSync(runtimeMarkerFile, BUNDLED_RUNTIME_FINGERPRINT, 'utf-8');
+  fs.writeFileSync(runtimeMarkerFile, runtimeFingerprint, 'utf-8');
 }
 
 /**
@@ -362,56 +398,63 @@ function installPackages(siteDir, platformTag, pythonBin) {
  *
  * python-build-standalone ships a full Python with many pre-installed packages
  * (litellm, google-cloud, grpc, etc.) that we don't need. We only keep the
- * packages required for GUI automation (PIL, pyobjc/Quartz).
+ * packages required for GUI automation (PIL, pyobjc/Quartz) and Knowledge Base
+ * parsing (Docling and its dependencies).
  */
 function cleanPythonRuntime(destDir, siteDir) {
   console.log(`🧹 Cleaning Python runtime to reduce bundle size...`);
 
-  // --- 1. Clean site-packages: keep only whitelisted packages ---
-  const SITE_PACKAGES_WHITELIST = new Set([
-    'PIL', 'Pillow', 'Pillow.libs',
-    'Quartz', 'AppKit', 'Foundation', 'CoreFoundation',
-    'objc', 'PyObjCTools',
-    'pyobjc_core', 'pyobjc_framework_Cocoa', 'pyobjc_framework_Quartz',
-  ]);
+  // --- 1. Clean site-packages: keep only bundled runtime packages ---
+  // Docling brings a sizeable dependency tree that changes over time, so avoid
+  // pruning site-packages after pip has built the deterministic target set.
+  if (exists(resolveRuntimeVersionFile(destDir))) {
+    console.log(`  ✓ site-packages: preserving bundled runtime packages`);
+  } else {
+    const SITE_PACKAGES_WHITELIST = new Set([
+      'PIL', 'Pillow', 'Pillow.libs',
+      'Quartz', 'AppKit', 'Foundation', 'CoreFoundation',
+      'objc', 'PyObjCTools',
+      'pyobjc_core', 'pyobjc_framework_Cocoa', 'pyobjc_framework_Quartz',
+    ]);
 
-  // Match package dirs and their .dist-info counterparts
-  function isWhitelisted(name) {
-    // Exact match
-    if (SITE_PACKAGES_WHITELIST.has(name)) return true;
-    // .dist-info for whitelisted packages (e.g. Pillow-10.0.0.dist-info)
-    if (name.endsWith('.dist-info')) {
-      const pkgName = name.replace(/-[\d].*$/, '');
-      // Check if the base package name matches any whitelist entry (case-insensitive)
-      for (const w of SITE_PACKAGES_WHITELIST) {
-        if (pkgName.toLowerCase() === w.toLowerCase()) return true;
-        // Handle underscored variants (pyobjc_core -> pyobjc-core)
-        if (pkgName.toLowerCase().replace(/-/g, '_') === w.toLowerCase()) return true;
+    // Match package dirs and their .dist-info counterparts
+    function isWhitelisted(name) {
+      // Exact match
+      if (SITE_PACKAGES_WHITELIST.has(name)) return true;
+      // .dist-info for whitelisted packages (e.g. Pillow-10.0.0.dist-info)
+      if (name.endsWith('.dist-info')) {
+        const pkgName = name.replace(/-[\d].*$/, '');
+        // Check if the base package name matches any whitelist entry (case-insensitive)
+        for (const w of SITE_PACKAGES_WHITELIST) {
+          if (pkgName.toLowerCase() === w.toLowerCase()) return true;
+          // Handle underscored variants (pyobjc_core -> pyobjc-core)
+          if (pkgName.toLowerCase().replace(/-/g, '_') === w.toLowerCase()) return true;
+        }
       }
+      return false;
     }
-    return false;
-  }
 
-  if (exists(siteDir)) {
-    let removedCount = 0;
-    let removedBytes = 0;
-    const entries = fs.readdirSync(siteDir);
-    for (const entry of entries) {
-      if (isWhitelisted(entry)) continue;
-      const entryPath = path.join(siteDir, entry);
-      try {
-        const stat = fs.statSync(entryPath);
-        const size = stat.isDirectory()
-          ? parseInt(execSync(`du -sk "${entryPath}"`, { encoding: 'utf8' }).split('\t')[0], 10) * 1024
-          : stat.size;
-        fs.rmSync(entryPath, { recursive: true, force: true });
-        removedCount++;
-        removedBytes += size;
-      } catch {
-        // Ignore errors during cleanup
+    if (exists(siteDir)) {
+      let removedCount = 0;
+      let removedBytes = 0;
+      const entries = fs.readdirSync(siteDir);
+      for (const entry of entries) {
+        if (isWhitelisted(entry)) continue;
+        const entryPath = path.join(siteDir, entry);
+        try {
+          const stat = fs.statSync(entryPath);
+          const size = stat.isDirectory()
+            ? parseInt(execSync(`du -sk "${entryPath}"`, { encoding: 'utf8' }).split('\t')[0], 10) * 1024
+            : stat.size;
+          fs.rmSync(entryPath, { recursive: true, force: true });
+          removedCount++;
+          removedBytes += size;
+        } catch {
+          // Ignore errors during cleanup
+        }
       }
+      console.log(`  ✓ site-packages: removed ${removedCount} items (~${Math.round(removedBytes / 1024 / 1024)}MB)`);
     }
-    console.log(`  ✓ site-packages: removed ${removedCount} items (~${Math.round(removedBytes / 1024 / 1024)}MB)`);
   }
 
   // --- 2. Clean __pycache__ and .pyc files ---
@@ -472,7 +515,7 @@ async function preparePlatformArch(platform, arch) {
   if (!target) return;
 
   const destDir = path.join(OUTPUT_ROOT, `${platform}-${arch}`);
-  const pythonBin = path.join(destDir, 'bin', 'python3');
+  const pythonBin = resolvePythonBin(destDir, platform);
   const siteDir = path.join(destDir, 'site-packages');
 
   // Download + extract standalone python if missing
@@ -500,7 +543,7 @@ async function preparePlatformArch(platform, arch) {
     }
 
     console.log(`📦 Extracting to: ${destDir}`);
-    extractArchive(archivePath, destDir);
+    extractArchive(archivePath, destDir, platform);
 
     if (!exists(pythonBin)) {
       throw new Error(`Python extraction failed: ${pythonBin} not found`);
@@ -512,19 +555,14 @@ async function preparePlatformArch(platform, arch) {
     console.log(`✓ Standalone Python already present: ${pythonBin}`);
   }
 
-  // Install packages for GUI automation
-  installPackages(siteDir, target.platformTag, pythonBin);
+  // Install packages for GUI automation and Knowledge Base parsing
+  installPackages(siteDir, target.platformTag, pythonBin, platform);
 
-  // Clean site-packages of non-whitelisted packages (also runs after pip install)
+  // Clean runtime files while preserving the installed package target set.
   cleanPythonRuntime(destDir, siteDir);
 }
 
 async function main() {
-  if (process.platform !== 'darwin' && process.platform !== 'linux') {
-    console.log('[prepare:python] Unsupported platform, skipping.');
-    return;
-  }
-
   ensureDir(OUTPUT_ROOT);
   ensureDir(DOWNLOAD_DIR);
 

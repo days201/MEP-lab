@@ -11,6 +11,7 @@ import {
   Globe,
   ChevronRight,
   BrainCircuit,
+  BookOpen,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useWindowSize } from '../hooks/useWindowSize';
@@ -24,6 +25,7 @@ import { SettingsSchedule } from './settings/SettingsSchedule';
 import { SettingsGeneral } from './settings/SettingsGeneral';
 import { SettingsLogs } from './settings/SettingsLogs';
 import { SettingsMemory } from './settings/SettingsMemory';
+import { SettingsKnowledgeBase } from './settings/SettingsKnowledgeBase';
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -33,6 +35,7 @@ interface SettingsPanelProps {
     | 'connectors'
     | 'skills'
     | 'memory'
+    | 'knowledgeBase'
     | 'schedule'
     | 'remote'
     | 'logs'
@@ -45,6 +48,7 @@ type TabId =
   | 'connectors'
   | 'skills'
   | 'memory'
+  | 'knowledgeBase'
   | 'schedule'
   | 'remote'
   | 'logs'
@@ -56,6 +60,7 @@ const VALID_TABS = new Set<TabId>([
   'connectors',
   'skills',
   'memory',
+  'knowledgeBase',
   'schedule',
   'remote',
   'logs',
@@ -134,6 +139,15 @@ export function SettingsPanel({ onClose, initialTab = 'api' }: SettingsPanelProp
       description: t('settings.memoryDesc'),
     },
     {
+      id: 'knowledgeBase' as TabId,
+      label: t('settings.knowledgeBase', 'Knowledge Base'),
+      icon: BookOpen,
+      description: t(
+        'settings.knowledgeBaseDesc',
+        'Import building-code documents for local MCP retrieval'
+      ),
+    },
+    {
       id: 'schedule' as TabId,
       label: t('settings.schedule'),
       icon: Clock3,
@@ -141,9 +155,9 @@ export function SettingsPanel({ onClose, initialTab = 'api' }: SettingsPanelProp
     },
     {
       id: 'remote' as TabId,
-      label: t('settings.remote', '远程控制'),
+      label: t('settings.remote', 'Remote Control'),
       icon: Wifi,
-      description: t('settings.remoteDesc', '通过飞书等平台远程使用'),
+      description: t('settings.remoteDesc', 'Use remotely through Feishu or other platforms'),
     },
     {
       id: 'logs' as TabId,
@@ -172,7 +186,7 @@ export function SettingsPanel({ onClose, initialTab = 'api' }: SettingsPanelProp
               {t('settings.title')}
             </p>
             <h2 className="mt-1 text-[1.24rem] font-semibold tracking-[-0.03em] text-text-primary">
-              Open Cowork
+              MEP Lab
             </h2>
             <p className="mt-1 text-[11px] leading-4 text-text-muted">{t('settings.panelDesc')}</p>
           </div>
@@ -266,6 +280,9 @@ export function SettingsPanel({ onClose, initialTab = 'api' }: SettingsPanelProp
               </div>
               <div className={activeTab === 'memory' ? '' : 'hidden'}>
                 {viewedTabs.has('memory') && <SettingsMemory />}
+              </div>
+              <div className={activeTab === 'knowledgeBase' ? '' : 'hidden'}>
+                {viewedTabs.has('knowledgeBase') && <SettingsKnowledgeBase />}
               </div>
               <div className={activeTab === 'schedule' ? '' : 'hidden'}>
                 {viewedTabs.has('schedule') && (

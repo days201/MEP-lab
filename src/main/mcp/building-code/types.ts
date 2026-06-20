@@ -11,13 +11,31 @@ export type CodeNodeType =
 
 export type CitationStatus = 'complete' | 'partial';
 
+export interface CodeLayoutBox {
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CodeParserProvenance {
+  name: 'docling' | 'fixture';
+  version: string;
+  sourceElementIds: string[];
+  pageRange: string;
+  boundingBoxes: CodeLayoutBox[];
+}
+
 export interface CodeSourceRecord {
   sourceId: string;
+  documentId: string;
   codeFamily: string;
   edition: string;
   jurisdictionScope: string;
   sourceTitle: string;
   sourceUrl: string;
+  localSourcePath: string;
   sourceChecksum: string;
 }
 
@@ -25,22 +43,27 @@ export interface CodeCitation {
   status: CitationStatus;
   citationId: string;
   sourceId: string;
+  documentId: string;
   codeFamily: string;
   edition: string;
   jurisdictionScope: string;
   sourceTitle: string;
   sourceUrl: string;
+  localSourcePath: string;
   sourceChecksum: string;
   logicalRef: string;
   nodeType: CodeNodeType;
   pageRange: string;
   headingPath: string[];
+  extractionConfidence: number;
+  parser: CodeParserProvenance;
   displayCitation: string;
 }
 
 export interface CodeNodeRecord {
   nodeId: string;
   sourceId: string;
+  documentId: string;
   nodeType: CodeNodeType;
   logicalRef: string;
   title: string;
@@ -51,6 +74,7 @@ export interface CodeNodeRecord {
   childNodeIds: string[];
   tableId?: string;
   extractionConfidence: number;
+  parser: CodeParserProvenance;
 }
 
 export interface CodeChunkRecord {

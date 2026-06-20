@@ -41,8 +41,8 @@ const execFileAsync = promisify(execFile);
 const PLATFORM = os.platform(); // 'darwin' for macOS, 'win32' for Windows
 writeMCPLog(`Platform detected: ${PLATFORM}`, 'Bootstrap');
 
-// Get Open Cowork data directory for persistent storage
-// Use platform-appropriate paths:
+// Get the legacy app data directory for persistent storage.
+// Use platform-appropriate paths retained for existing installations:
 // - macOS: ~/Library/Application Support/open-cowork
 // - Windows: %APPDATA%/open-cowork
 const OPEN_COWORK_DATA_DIR =
@@ -1781,10 +1781,10 @@ async function executeCliclick(command: string): Promise<{ stdout: string; stder
     // Treat this as a hard failure to avoid reporting false-positive click success.
     if (/Accessibility privileges not enabled/i.test(result.stderr || '')) {
       const hint =
-        '\n\nmacOS 权限提示 / Permissions:\n' +
-        '- System Settings → Privacy & Security → Accessibility：允许 Open Cowork\n' +
-        '- 如果是终端运行：允许 Terminal/iTerm\n' +
-        '- 授权后请重启 Open Cowork 再重试\n';
+        '\n\nmacOS permissions:\n' +
+        '- System Settings -> Privacy & Security -> Accessibility: allow MEP Lab\n' +
+        '- If running from a terminal: allow Terminal/iTerm\n' +
+        '- Restart MEP Lab after granting permission, then try again\n';
       throw new Error(
         `cliclick cannot control UI because Accessibility permission is not enabled.${hint}`
       );
@@ -1794,9 +1794,9 @@ async function executeCliclick(command: string): Promise<{ stdout: string; stder
   } catch (error: unknown) {
     const baseMessage = error instanceof Error ? error.message : String(error);
     const hint =
-      '\n\nmacOS 权限提示 / Permissions:\n' +
-      '- System Settings → Privacy & Security → Accessibility：允许 Open Cowork\n' +
-      '- System Settings → Privacy & Security → Automation：允许 Open Cowork 控制 “System Events”\n';
+      '\n\nmacOS permissions:\n' +
+      '- System Settings -> Privacy & Security -> Accessibility: allow MEP Lab\n' +
+      '- System Settings -> Privacy & Security -> Automation: allow MEP Lab to control "System Events"\n';
     throw new Error(`${baseMessage}${hint}`);
   }
 }
@@ -3818,9 +3818,9 @@ async function takeScreenshot(
   } catch (error: unknown) {
     const baseMessage = error instanceof Error ? error.message : String(error);
     const hint =
-      '\n\nmacOS 权限提示 / Permissions:\n' +
-      '- System Settings → Privacy & Security → Screen Recording：允许 Open Cowork\n' +
-      '- 重新启动应用后再试 / Restart the app and try again\n';
+      '\n\nmacOS permissions:\n' +
+      '- System Settings -> Privacy & Security -> Screen Recording: allow MEP Lab\n' +
+      '- Restart the app and try again\n';
     throw new Error(`${baseMessage}${hint}`);
   }
 
@@ -4397,8 +4397,8 @@ async function callVisionAPIWithTimeout(
     };
 
     if (isOpenRouter) {
-      headers['HTTP-Referer'] = 'https://github.com/OpenCoworkAI/open-cowork';
-      headers['X-Title'] = 'Open Cowork';
+      headers['HTTP-Referer'] = 'https://github.com/days201/MEP-lab';
+      headers['X-Title'] = 'MEP Lab';
     }
 
     return new Promise<string>((resolve, reject) => {
@@ -4974,13 +4974,13 @@ async function analyzeScreenshotWithVision(
     // Get image dimensions
     const imageDims = await getImageDimensions(annotatedPath);
 
-    const prompt = `给我${elementDescription}的grounding坐标。
+    const prompt = `Give me the grounding coordinates for ${elementDescription}.
 
-**注意**：图片上可能有黄色圆圈标记，这些是之前点击过的位置（仅用于相对位置参考，它们并不一定是正确的点击位置），标记格式为"#序号"和已经归一化之后的"[y,x]"坐标。这些标记不是界面的一部分，请忽略它们，只定位实际的界面元素。
+**Note**: The image may contain yellow circle markers from previous clicks. They are only relative position references and are not necessarily correct click targets. Marker labels use "#number" and normalized "[y,x]" coordinates. These markers are not part of the UI; ignore them and locate only the actual UI element.
 
-坐标格式：归一化到0-1000，格式为[ymin, xmin, ymax, xmax]
+Coordinate format: normalized to 0-1000 as [ymin, xmin, ymax, xmax].
 
-返回JSON（不要markdown）:
+Return JSON only, without markdown:
 {"box_2d": [ymin, xmin, ymax, xmax], "confidence": <0-100>}`;
 
     writeMCPLog(`[analyzeScreenshotWithVision] Prompt: ${prompt}`);

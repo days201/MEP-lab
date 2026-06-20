@@ -34,7 +34,7 @@ describe('tool result utils', () => {
     const result = {
       content: [{ type: 'text', text: 'Screenshot captured successfully' }],
       details: {
-        openCoworkImages: [
+        mepLabImages: [
           {
             data: base64Image,
             mimeType: 'image/png',
@@ -56,7 +56,7 @@ describe('tool result utils', () => {
     const result = {
       content: [{ type: 'text', text: 'Captured two screenshots' }],
       details: {
-        openCoworkImages: [
+        mepLabImages: [
           { data: firstImage, mimeType: 'image/png' },
           { data: secondImage, mimeType: 'image/png' },
         ],

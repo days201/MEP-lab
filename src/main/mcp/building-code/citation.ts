@@ -1,4 +1,4 @@
-import type { BuildingCodeEvidence, CodeCitation } from './types';
+import type { BuildingCodeEvidence, CodeCitation, CodeLayoutBox } from './types';
 
 type DisplayCitationInput = Pick<CodeCitation, 'codeFamily' | 'edition' | 'logicalRef'>;
 
@@ -20,6 +20,7 @@ const requiredCitationStringFields = [
   'status',
   'citationId',
   'sourceId',
+  'documentId',
   'codeFamily',
   'edition',
   'jurisdictionScope',
@@ -31,6 +32,7 @@ const requiredCitationStringFields = [
   'pageRange',
   'displayCitation',
 ] as const;
+const allowedParserNames = ['docling', 'fixture'] as const;
 
 export function buildDisplayCitation(input: DisplayCitationInput): string {
   const codeFamily = normalizeCitationPart(input.codeFamily);
@@ -62,6 +64,9 @@ export function assertCitedEvidence(evidence: unknown): asserts evidence is Buil
 
   assertAllowedValue(evidence.citation.status, allowedCitationStatuses, 'citation.status');
   assertAllowedValue(evidence.citation.nodeType, allowedCodeNodeTypes, 'citation.nodeType');
+  assertString(evidence.citation.localSourcePath, 'citation.localSourcePath');
+  assertFiniteNumber(evidence.citation.extractionConfidence, 'citation.extractionConfidence');
+  assertParserProvenance(evidence.citation.parser, 'citation.parser');
   assertStringArray(evidence.citation.headingPath, 'citation.headingPath');
 
   const expectedDisplayCitation = buildDisplayCitation(evidence.citation as DisplayCitationInput);
@@ -124,6 +129,18 @@ function assertNonEmptyString(value: unknown, field: string): void {
   }
 }
 
+function assertString(value: unknown, field: string): asserts value is string {
+  if (typeof value !== 'string') {
+    throw new Error(`Building code evidence is missing ${field}`);
+  }
+}
+
+function assertFiniteNumber(value: unknown, field: string): asserts value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`Building code evidence is missing ${field}`);
+  }
+}
+
 function assertAllowedValue<const T extends readonly string[]>(
   value: unknown,
   allowedValues: T,
@@ -138,6 +155,39 @@ function assertStringArray(value: unknown, field: string): asserts value is stri
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     throw new Error(`Building code evidence is missing ${field}`);
   }
+}
+
+function assertParserProvenance(value: unknown, field: string): void {
+  if (!isRecord(value)) {
+    throw new Error(`Building code evidence is missing ${field}`);
+  }
+
+  assertAllowedValue(value.name, allowedParserNames, `${field}.name`);
+  assertNonEmptyString(value.version, `${field}.version`);
+  assertStringArray(value.sourceElementIds, `${field}.sourceElementIds`);
+  assertNonEmptyString(value.pageRange, `${field}.pageRange`);
+  assertLayoutBoxes(value.boundingBoxes, `${field}.boundingBoxes`);
+}
+
+function assertLayoutBoxes(value: unknown, field: string): asserts value is CodeLayoutBox[] {
+  if (
+    !Array.isArray(value) ||
+    value.some(
+      (item) =>
+        !isRecord(item) ||
+        !isFiniteNumber(item.pageNumber) ||
+        !isFiniteNumber(item.x) ||
+        !isFiniteNumber(item.y) ||
+        !isFiniteNumber(item.width) ||
+        !isFiniteNumber(item.height)
+    )
+  ) {
+    throw new Error(`Building code evidence is missing ${field}`);
+  }
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

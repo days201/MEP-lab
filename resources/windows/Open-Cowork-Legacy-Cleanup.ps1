@@ -9,7 +9,7 @@ Set-StrictMode -Version Latest
 
 function Write-Step {
   param([string]$Message)
-  Write-Host "[Open Cowork Cleanup] $Message"
+  Write-Host "[MEP Lab Cleanup] $Message"
 }
 
 function Add-UniquePath {
@@ -82,7 +82,7 @@ function Stop-OpenCoworkProcesses {
   })
 
   if ($processes.Count -eq 0) {
-    Write-Step "No running Open Cowork processes found."
+    Write-Step "No running legacy Open Cowork processes found."
     return
   }
 
@@ -122,7 +122,7 @@ Add-UniquePath -List $appDataPaths -PathValue (Join-Path $env:LOCALAPPDATA "Open
 Add-UniquePath -List $appDataPaths -PathValue (Join-Path $env:LOCALAPPDATA "open-cowork")
 
 Write-Host ""
-Write-Step "This tool removes broken Open Cowork Windows install leftovers."
+Write-Step "This tool removes broken legacy Open Cowork Windows install leftovers for MEP Lab."
 Write-Step "Install directories and uninstall registry entries will be removed."
 if ($RemoveAppData) {
   Write-Step "AppData cleanup is enabled. Local settings and cached data will also be removed."
@@ -153,7 +153,7 @@ foreach ($pathValue in $installPaths) {
     Remove-Item -LiteralPath $pathValue -Recurse -Force -ErrorAction Stop
   } catch {
     $failures += "install path: $pathValue"
-    Write-Warning "Failed to remove install path $pathValue: $($_.Exception.Message)"
+    Write-Warning "Failed to remove install path ${pathValue}: $($_.Exception.Message)"
   }
 }
 
@@ -182,14 +182,14 @@ if ($RemoveAppData) {
       Remove-Item -LiteralPath $pathValue -Recurse -Force -ErrorAction Stop
     } catch {
       $failures += "AppData path: $pathValue"
-      Write-Warning "Failed to remove AppData path $pathValue: $($_.Exception.Message)"
+      Write-Warning "Failed to remove AppData path ${pathValue}: $($_.Exception.Message)"
     }
   }
 }
 
 Write-Host ""
 if ($failures.Count -eq 0) {
-  Write-Step "Cleanup finished. You can rerun the Open Cowork installer now."
+  Write-Step "Cleanup finished. You can rerun the MEP Lab installer now."
   if (-not $RemoveAppData) {
     Write-Step "If you also want to reset local settings, rerun this tool with -RemoveAppData."
   }

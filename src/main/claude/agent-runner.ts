@@ -4,7 +4,7 @@
  * AI query execution engine (1514 lines).
  *
  * Responsibilities:
- * - Runs AI conversations via the Open Cowork agent SDK (createAgentSession)
+ * - Runs AI conversations via the MEP Lab agent SDK (createAgentSession)
  * - Routes providers via pi-ai SDK for model resolution
  * - Bridges MCP tools into SDK ToolDefinition format
  * - Streams responses back as ServerEvents (stream.message, stream.partial, trace.step)
@@ -413,12 +413,12 @@ function buildMcpCustomTools(mcpManager: MCPManager): ToolDefinition[] {
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
         try {
           const result = await mcpManager.callTool(mcpTool.name, params as Record<string, unknown>);
-          const normalizedResult = normalizeMcpToolResultForModel(result);
+          const normalizedResult = normalizeMcpToolResultForModel(result, mcpTool.name);
           return {
             content: [{ type: 'text' as const, text: normalizedResult.text }],
             details:
               normalizedResult.images.length > 0
-                ? { openCoworkImages: normalizedResult.images }
+                ? { mepLabImages: normalizedResult.images }
                 : undefined,
           };
         } catch (err: unknown) {
@@ -898,7 +898,7 @@ ${hints.join('\n')}
     this._skillsAdapter = skillsAdapter;
     this.extensionManager = extensionManager;
 
-    log('[ClaudeAgentRunner] Initialized with Open Cowork agent SDK');
+    log('[ClaudeAgentRunner] Initialized with MEP Lab agent SDK');
     log('[ClaudeAgentRunner] Skills enabled: settingSources=[user, project], Skill tool enabled');
     if (mcpManager) {
       log('[ClaudeAgentRunner] MCP support enabled');
@@ -2013,7 +2013,8 @@ ${hints.join('\n')}
                 const hasPlaceholders = resolvedArgs.some(
                   (arg) =>
                     arg.includes('{SOFTWARE_DEV_SERVER_PATH}') ||
-                    arg.includes('{GUI_OPERATE_SERVER_PATH}')
+                    arg.includes('{GUI_OPERATE_SERVER_PATH}') ||
+                    arg.includes('{BUILDING_CODE_SERVER_PATH}')
                 );
 
                 if (hasPlaceholders) {
@@ -2026,6 +2027,8 @@ ${hints.join('\n')}
                     presetKey = 'software-development';
                   } else if (config.name === 'GUI_Operate' || config.name === 'GUI Operate') {
                     presetKey = 'gui-operate';
+                  } else if (config.name === 'Building_Code' || config.name === 'Building Code') {
+                    presetKey = 'building-code';
                   }
 
                   if (presetKey) {
@@ -2099,7 +2102,7 @@ This is an isolated sandbox environment. Use ${VIRTUAL_WORKSPACE_PATH} as the ro
             : '';
 
       const coworkAppendPrompt = [
-        'You are an Open Cowork assistant. Be concise, accurate, and tool-capable.',
+        'You are an MEP Lab assistant. Be concise, accurate, and tool-capable.',
         `CRITICAL BEHAVIORAL RULES:
 1. CHAT FIRST: By default, respond to the user in plain text within the conversation. Do NOT create, write, or edit files unless the user explicitly asks you to (e.g., "create a file", "write this to...", "edit the code", "save as...", mentions a specific file path, or describes code changes they want applied). For questions, summaries, explanations, analysis, and general conversation — always reply directly in chat text.
 2. When a request is actionable, proceed immediately with reasonable assumptions. If you need clarification, ask briefly in plain text.
@@ -2109,6 +2112,8 @@ This is an isolated sandbox environment. Use ${VIRTUAL_WORKSPACE_PATH} as the ro
         workspaceInfoPrompt,
         `<citation_requirements>
 If your answer uses linkable content from MCP tools, include a "Sources:" section and otherwise use standard Markdown links: [Title](https://claude.ai/chat/URL).
+Any answer using Building_Code evidence must cite citation.displayCitation inline and include Sources:.
+If a Building_Code result says it is unusable, do not paraphrase it.
 </citation_requirements>`,
         `<tool_behavior>
 Tool routing:
@@ -2791,7 +2796,10 @@ Tool routing:
               if (controller.signal.aborted) break;
               const toolCallId = event.toolCallId;
               const isError = event.isError;
-              const normalizedToolResult = normalizeToolExecutionResultForUi(event.result);
+              const normalizedToolResult = normalizeToolExecutionResultForUi(
+                event.result,
+                event.toolName
+              );
               const outputText = normalizedToolResult.content;
               const toolDisplayName = this.getToolDisplayName(event.toolName);
               this.sendTraceUpdate(session.id, toolCallId, {
@@ -2934,7 +2942,7 @@ Tool routing:
           id: uuidv4(),
           sessionId: session.id,
           role: 'assistant',
-          content: [{ type: 'text', text: '**请求超时**：长时间未收到响应，操作已中止。' }],
+          content: [{ type: 'text', text: '**Request timed out**: no response was received for a while, so the operation was aborted.' }],
           timestamp: Date.now(),
         };
         this.sendMessage(session.id, errorMsg);
@@ -2977,7 +2985,7 @@ Tool routing:
             id: uuidv4(),
             sessionId: session.id,
             role: 'assistant',
-            content: [{ type: 'text', text: '**请求超时**：长时间未收到响应，操作已中止。' }],
+            content: [{ type: 'text', text: '**Request timed out**: no response was received for a while, so the operation was aborted.' }],
             timestamp: Date.now(),
           };
           this.sendMessage(session.id, errorMsg);
