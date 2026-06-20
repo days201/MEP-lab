@@ -279,6 +279,45 @@ describe('KnowledgeBaseService', () => {
     expect(afterIndex.vectorFile).toBe(beforeIndex.vectorFile);
   });
 
+  it('preserves the prior registry status and active index when removing a document fails to save the rebuild', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
+    roots.push(userData);
+    const source = path.join(userData, 'input.md');
+    fs.writeFileSync(source, 'Section 9.10.3.1 Fire separations\nBody text.');
+    let failSave = false;
+    const service = new KnowledgeBaseService({
+      userDataPath: userData,
+      now: () => (failSave ? '2026-06-19T12:05:00.000Z' : '2026-06-19T12:00:00.000Z'),
+      randomId: () => 'doc-1',
+      parseDocument: async () => parsed(),
+      embeddingClientFactory: () => ({
+        model: 'text-embedding-3-small',
+        embed: async (texts) => texts.map(() => [1, 0, 0]),
+      }),
+      saveIndex: async (indexDir: string, index: BuildingCodeIndex) => {
+        if (failSave) {
+          throw new Error(`cannot save index at ${indexDir} with ${index.nodes.length} nodes`);
+        }
+        await saveBuildingCodeIndex(indexDir, index);
+      },
+    });
+
+    await service.uploadDocuments([source]);
+    const before = await service.getOverview();
+    const beforeIndex = activeIndexSnapshot(userData);
+    failSave = true;
+    const after = await service.removeDocument('doc-1');
+    const afterIndex = activeIndexSnapshot(userData);
+
+    expect(after.summary).toEqual(before.summary);
+    expect(after.graph.nodes).toEqual(before.graph.nodes);
+    expect(after.documents[0].status).toBe('ready');
+    expect(after.documents[0].indexSummary).toEqual(before.documents[0].indexSummary);
+    expect(after.documents[0].lastIndexRebuildAt).toBe(before.documents[0].lastIndexRebuildAt);
+    expect(afterIndex.indexFile).toBe(beforeIndex.indexFile);
+    expect(afterIndex.vectorFile).toBe(beforeIndex.vectorFile);
+  });
+
   it('does not rebuild the active index when a new document parse failure is the only batch change', async () => {
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
     roots.push(userData);

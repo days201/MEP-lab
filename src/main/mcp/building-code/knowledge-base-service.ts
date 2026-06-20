@@ -35,6 +35,11 @@ import type {
 type ParseDocument = (filePath: string) => Promise<NormalizedDoclingResult>;
 type EmbeddingClientFactory = () => BuildingCodeEmbeddingClient;
 type SaveIndex = (indexDir: string, index: BuildingCodeIndex) => Promise<void>;
+interface RebuildIndexResult {
+  overview: KnowledgeBaseOverview;
+  index: BuildingCodeIndex;
+  committed: boolean;
+}
 
 export interface KnowledgeBaseServiceOptions {
   userDataPath: string;
@@ -124,7 +129,7 @@ export class KnowledgeBaseService {
       return this.overviewFrom(await this.registry.list(), await this.loadActiveIndexOrEmpty());
     }
 
-    return this.rebuildIndex();
+    return (await this.rebuildIndex()).overview;
   }
 
   async reparseDocument(documentId: string): Promise<KnowledgeBaseOverview> {
@@ -171,7 +176,7 @@ export class KnowledgeBaseService {
       return this.overviewFrom(await this.registry.list(), await this.loadActiveIndexOrEmpty());
     }
 
-    return this.rebuildIndex();
+    return (await this.rebuildIndex()).overview;
   }
 
   async removeDocument(documentId: string): Promise<KnowledgeBaseOverview> {
@@ -183,10 +188,17 @@ export class KnowledgeBaseService {
     }
 
     await this.registry.markRemoved(documentId, this.now());
-    return this.rebuildIndex();
+    const rebuilt = await this.rebuildIndex();
+
+    if (!rebuilt.committed) {
+      await this.registry.upsert(document);
+      return this.overviewFrom(await this.registry.list(), rebuilt.index);
+    }
+
+    return rebuilt.overview;
   }
 
-  private async rebuildIndex(): Promise<KnowledgeBaseOverview> {
+  private async rebuildIndex(): Promise<RebuildIndexResult> {
     await ensureKnowledgeBaseStorage(this.paths);
     const documents = await this.registry.list();
     const activeDocuments = documents.filter((document) =>
@@ -229,7 +241,11 @@ export class KnowledgeBaseService {
     }
 
     if (failedDocumentIds.size > 0) {
-      return this.overviewFrom(await this.registry.list(), previousIndex);
+      return {
+        overview: this.overviewFrom(await this.registry.list(), previousIndex),
+        index: previousIndex,
+        committed: false,
+      };
     }
 
     let embeddingWarning: KnowledgeBaseDiagnostic | null = null;
@@ -251,12 +267,20 @@ export class KnowledgeBaseService {
     try {
       await this.saveIndex(this.paths.indexDir, nextIndex);
     } catch {
-      return this.overviewFrom(await this.registry.list(), previousIndex);
+      return {
+        overview: this.overviewFrom(await this.registry.list(), previousIndex),
+        index: previousIndex,
+        committed: false,
+      };
     }
 
     await this.updateDocumentSummaries(nextIndex, failedDocumentIds, embeddingWarning);
 
-    return this.overviewFrom(await this.registry.list(), nextIndex);
+    return {
+      overview: this.overviewFrom(await this.registry.list(), nextIndex),
+      index: nextIndex,
+      committed: true,
+    };
   }
 
   private async createQueuedRecord(filePath: string): Promise<KnowledgeBaseDocumentRecord> {
