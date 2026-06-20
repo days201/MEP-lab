@@ -62,6 +62,7 @@
     "typecheck": "tsc --noEmit",
     "pre-build-check": "node scripts/pre-build-check.js",
     "check:branding": "node scripts/check-branding.js",
+    "check:fork-decoupling": "node scripts/check-fork-decoupling.js",
     "brand:assets": "node scripts/generate-brand-assets.js",
     "clean": "rimraf dist dist-electron dist-mcp dist-wsl-agent dist-lima-agent .bundle-resources release",
     "deploy:local": "bash scripts/deploy-local.sh"

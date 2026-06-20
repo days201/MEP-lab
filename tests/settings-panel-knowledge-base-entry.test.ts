@@ -28,9 +28,12 @@ describe('SettingsPanel Knowledge Base entry', () => {
     expect(component).toContain('window.electronAPI.knowledgeBase.revealSource');
     expect(component).toContain('window.electronAPI.knowledgeBase.getDroppedFilePaths');
     expect(component).not.toContain("('path' in file");
-    expect(component).toContain("setStatus(t('knowledgeBase.reparseComplete'))");
-    expect(component).toContain("setStatus(t('knowledgeBase.removeComplete'))");
+    expect(component).toContain("reportStatus(t('knowledgeBase.reparseComplete'), 'success')");
+    expect(component).toContain("reportStatus(t('knowledgeBase.removeComplete'), 'success')");
+    expect(component).toContain("reportStatus(t('knowledgeBase.dropFailed'), 'error')");
     expect(component).toContain("t('knowledgeBase.revealFailed'");
+    expect(component).toContain('statusTone === \'error\'');
+    expect(component).toContain('selectedNodeEdgeCounts');
     expect(component).toContain("t('knowledgeBase.uploadTitle')");
     expect(component).toContain("t('knowledgeBase.graphTitle')");
     expect(component).toContain("t('knowledgeBase.diagnosticsTitle')");
@@ -45,5 +48,6 @@ describe('SettingsPanel Knowledge Base entry', () => {
     expect(en).toContain('"reparseAction"');
     expect(en).toContain('"revealSourceAction"');
     expect(en).toContain('"removeAction"');
+    expect(en).toContain('"dropFailed"');
   });
 });

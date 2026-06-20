@@ -141,7 +141,7 @@ export function createFromBuildingCodePreset(): {
 }
 
 async function loadIndex(): Promise<BuildingCodeIndex> {
-  const indexDir = process.env.BUILDING_CODE_INDEX_DIR;
+  const indexDir = process.env.BUILDING_CODE_INDEX_DIR?.trim();
   if (!indexDir) {
     throw new Error('Building_Code knowledge base is empty. Upload documents in Settings > Knowledge Base.');
   }

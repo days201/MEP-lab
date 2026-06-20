@@ -20,6 +20,7 @@ import { app, BrowserWindow, shell } from 'electron';
 
 import path from 'path';
 import { connectWithOAuthRetry, MepLabMcpOAuthProvider } from './mcp-oauth';
+import { resolveMcpServerRuntimeConfig } from './mcp-config-store';
 import { log, logError, logWarn, logCtx, logCtxError, logTiming } from '../utils/logger';
 import { getDefaultShell } from '../utils/shell-resolver';
 
@@ -588,6 +589,7 @@ export class MCPManager {
    * This is more efficient than reinitializing all servers
    */
   async updateServer(config: MCPServerConfig): Promise<void> {
+    config = resolveMcpServerRuntimeConfig(config);
     // Defer if initialization is in progress to avoid races
     if (this.initializingServers) {
       log('[MCPManager] Deferring update during initialization');
@@ -776,6 +778,7 @@ export class MCPManager {
    * connectionStatus is always set to 'connected' or 'failed'.
    */
   private async connectServerInternal(config: MCPServerConfig): Promise<void> {
+    config = resolveMcpServerRuntimeConfig(config);
     let transport: MCPTransport;
     let commandForLogging = '';
     let argsForLogging: string[] = [];

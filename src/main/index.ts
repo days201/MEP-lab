@@ -39,7 +39,7 @@ import {
 import { runConfigApiTest } from './config/config-test-routing';
 import { listOllamaModels } from './config/ollama-api';
 import { setPermissionRules } from './config/permission-rules-store';
-import { mcpConfigStore } from './mcp/mcp-config-store';
+import { mcpConfigStore, resolveMcpServerRuntimeConfig } from './mcp/mcp-config-store';
 import { getSandboxAdapter, shutdownSandbox } from './sandbox/sandbox-adapter';
 import { SandboxSync } from './sandbox/sandbox-sync';
 import { WSLBridge } from './sandbox/wsl-bridge';
@@ -1646,11 +1646,12 @@ ipcMain.handle('mcp.getServer', (_event, serverId: string) => {
 
 ipcMain.handle('mcp.saveServer', async (_event, config: MCPServerConfig) => {
   mcpConfigStore.saveServer(config);
+  const runtimeConfig = resolveMcpServerRuntimeConfig(config);
   // Update only this specific server, not all servers
   if (sessionManager) {
     const mcpManager = sessionManager.getMCPManager();
     try {
-      await mcpManager.updateServer(config);
+      await mcpManager.updateServer(runtimeConfig);
       sessionManager.invalidateMcpServersCache();
       log(`[MCP] Server ${config.name} updated successfully`);
     } catch (err) {

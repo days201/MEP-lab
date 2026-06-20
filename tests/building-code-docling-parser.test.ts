@@ -1,9 +1,12 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  buildDoclingSpawnEnv,
   DoclingParserUnavailableError,
   parseDocumentWithDocling,
+  resolveDefaultBridgePath,
   type DoclingProcessRunner,
 } from '../src/main/mcp/building-code/docling-parser';
 
@@ -145,6 +148,36 @@ describe('building-code Docling parser bridge', () => {
     );
 
     expect(parserSource).toContain("path.join(__dirname, 'building-code', 'docling_bridge.py')");
+    expect(parserSource).toContain("path.join(resourcesPath, 'mcp', 'building-code', 'docling_bridge.py')");
+  });
+
+  it('prefers the packaged resources bridge path when present', () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'docling-bridge-'));
+    const bridgePath = path.join(tempRoot, 'mcp', 'building-code', 'docling_bridge.py');
+    fs.mkdirSync(path.dirname(bridgePath), { recursive: true });
+    fs.writeFileSync(bridgePath, '# packaged bridge\n');
+
+    expect(resolveDefaultBridgePath(tempRoot).replace(/\\/g, '/')).toBe(
+      bridgePath.replace(/\\/g, '/')
+    );
+
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('adds bundled site-packages to PYTHONPATH for packaged Python executables', () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'docling-python-'));
+    const sitePackages = path.join(tempRoot, 'site-packages');
+    fs.mkdirSync(sitePackages, { recursive: true });
+    const pythonPath = path.join(tempRoot, 'python.exe');
+
+    const env = buildDoclingSpawnEnv(pythonPath, { EXISTING: '1' });
+
+    expect(env.PYTHONHOME).toBe(tempRoot);
+    expect(env.PYTHONNOUSERSITE).toBe('1');
+    expect(env.PYTHONPATH?.split(path.delimiter)).toContain(sitePackages);
+    expect(env.EXISTING).toBe('1');
+
+    fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
   it('rejects raw missing module output with an actionable error', async () => {

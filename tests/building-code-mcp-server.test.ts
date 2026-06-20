@@ -1,11 +1,20 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFromBuildingCodePreset, handleBuildingCodeTool, listBuildingCodeTools } from '../src/main/mcp/building-code-server';
 import { saveBuildingCodeIndex, type BuildingCodeIndex } from '../src/main/mcp/building-code/index-store';
 
 const roots: string[] = [];
+let originalBuildingCodeIndexDir: string | undefined;
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}
 
 function persistedIndex(): BuildingCodeIndex {
   return {
@@ -57,8 +66,12 @@ function persistedIndex(): BuildingCodeIndex {
 }
 
 describe('building-code MCP server surface', () => {
+  beforeEach(() => {
+    originalBuildingCodeIndexDir = process.env.BUILDING_CODE_INDEX_DIR;
+  });
+
   afterEach(() => {
-    delete process.env.BUILDING_CODE_INDEX_DIR;
+    restoreEnv('BUILDING_CODE_INDEX_DIR', originalBuildingCodeIndexDir);
     for (const root of roots.splice(0)) {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -72,6 +85,14 @@ describe('building-code MCP server surface', () => {
       'lookup_table',
     ]);
     expect(JSON.stringify(listBuildingCodeTools())).not.toContain('fixture');
+  });
+
+  it('returns an empty-knowledge-base error when BUILDING_CODE_INDEX_DIR is whitespace-only', async () => {
+    process.env.BUILDING_CODE_INDEX_DIR = '   ';
+
+    await expect(handleBuildingCodeTool('read_section', { ref: 'Section 9.10.3.1' })).rejects.toThrow(
+      'Building_Code knowledge base is empty'
+    );
   });
 
   it('handles exact section reads from a persisted active index', async () => {

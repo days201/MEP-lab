@@ -104,4 +104,14 @@ describe('bundle-mcp staging', () => {
     expect(bundleScript).toContain('docling_bridge.py');
     expect(bundleScript).toContain('building-code');
   });
+
+  it('requires building-code MCP artifacts in default bundle output for release packaging', () => {
+    const bundleScript = fs.readFileSync(path.resolve(process.cwd(), 'scripts/bundle-mcp.js'), 'utf8');
+    const builderConfig = fs.readFileSync(path.resolve(process.cwd(), 'electron-builder.yml'), 'utf8');
+
+    expect(bundleScript).toMatch(/name:\s*'building-code-server'/);
+    expect(bundleScript).toContain('docling_bridge.py');
+    expect(builderConfig).toContain('.bundle-resources/mcp');
+    expect(builderConfig).toMatch(/to:\s*mcp/);
+  });
 });

@@ -132,6 +132,7 @@
     "uploadDescription": "导入本地建筑规范文件，供 Building_Code MCP 工具使用。",
     "chooseFiles": "选择文件",
     "uploadComplete": "文档已导入",
+    "dropFailed": "无法读取拖放的文件。请从本机拖入文件，而不是从其他应用窗口拖入。",
     "reparseAction": "重新解析",
     "reparseComplete": "文档已重新解析",
     "revealSourceAction": "定位源文件",

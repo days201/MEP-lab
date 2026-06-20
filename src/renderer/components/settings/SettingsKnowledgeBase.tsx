@@ -8,8 +8,19 @@ export function SettingsKnowledgeBase() {
   const { t } = useTranslation();
   const [overview, setOverview] = useState<KnowledgeBaseOverview | null>(null);
   const [status, setStatus] = useState('');
+  const [statusTone, setStatusTone] = useState<'success' | 'error' | null>(null);
   const [busy, setBusy] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  function clearStatus() {
+    setStatus('');
+    setStatusTone(null);
+  }
+
+  function reportStatus(message: string, tone: 'success' | 'error') {
+    setStatus(message);
+    setStatusTone(tone);
+  }
 
   const selectedNode = useMemo(
     () =>
@@ -18,6 +29,17 @@ export function SettingsKnowledgeBase() {
       null,
     [overview, selectedNodeId]
   );
+
+  const selectedNodeEdgeCounts = useMemo(() => {
+    if (!selectedNode || !overview) {
+      return { resolved: 0, unresolved: 0 };
+    }
+    const edges = overview.graph.edges.filter((edge) => edge.fromNodeId === selectedNode.nodeId);
+    return {
+      resolved: edges.filter((edge) => edge.status === 'resolved').length,
+      unresolved: edges.filter((edge) => edge.status === 'unresolved').length,
+    };
+  }, [overview, selectedNode]);
 
   const actionLabels = {
     reparse: t('knowledgeBase.reparseAction'),
@@ -33,7 +55,7 @@ export function SettingsKnowledgeBase() {
 
   useEffect(() => {
     void refresh().catch((error) =>
-      setStatus(error instanceof Error ? error.message : String(error))
+      reportStatus(error instanceof Error ? error.message : String(error), 'error')
     );
   }, []);
 
@@ -52,14 +74,14 @@ export function SettingsKnowledgeBase() {
   async function pickAndUpload() {
     if (busy) return;
     setBusy(true);
-    setStatus('');
+    clearStatus();
     try {
       const files = await window.electronAPI.knowledgeBase.selectDocuments();
       if (files.length === 0) return;
       setOverview(await window.electronAPI.knowledgeBase.uploadDocuments(files));
-      setStatus(t('knowledgeBase.uploadComplete'));
+      reportStatus(t('knowledgeBase.uploadComplete'), 'success');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      reportStatus(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -68,14 +90,17 @@ export function SettingsKnowledgeBase() {
   async function uploadDropped(files: FileList | null) {
     if (busy) return;
     const paths = window.electronAPI.knowledgeBase.getDroppedFilePaths(Array.from(files ?? []));
-    if (paths.length === 0) return;
+    if (paths.length === 0) {
+      reportStatus(t('knowledgeBase.dropFailed'), 'error');
+      return;
+    }
     setBusy(true);
-    setStatus('');
+    clearStatus();
     try {
       setOverview(await window.electronAPI.knowledgeBase.uploadDocuments(paths));
-      setStatus(t('knowledgeBase.uploadComplete'));
+      reportStatus(t('knowledgeBase.uploadComplete'), 'success');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      reportStatus(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -84,12 +109,12 @@ export function SettingsKnowledgeBase() {
   async function reparse(documentId: string) {
     if (busy) return;
     setBusy(true);
-    setStatus('');
+    clearStatus();
     try {
       setOverview(await window.electronAPI.knowledgeBase.reparseDocument(documentId));
-      setStatus(t('knowledgeBase.reparseComplete'));
+      reportStatus(t('knowledgeBase.reparseComplete'), 'success');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      reportStatus(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -99,12 +124,12 @@ export function SettingsKnowledgeBase() {
     if (busy) return;
     if (!window.confirm(t('knowledgeBase.removeConfirm'))) return;
     setBusy(true);
-    setStatus('');
+    clearStatus();
     try {
       setOverview(await window.electronAPI.knowledgeBase.removeDocument(documentId));
-      setStatus(t('knowledgeBase.removeComplete'));
+      reportStatus(t('knowledgeBase.removeComplete'), 'success');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      reportStatus(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -113,18 +138,19 @@ export function SettingsKnowledgeBase() {
   async function reveal(documentId: string) {
     if (busy) return;
     setBusy(true);
-    setStatus('');
+    clearStatus();
     try {
       const result = await window.electronAPI.knowledgeBase.revealSource(documentId);
       if (!result.success) {
-        setStatus(
+        reportStatus(
           t('knowledgeBase.revealFailed', {
             error: result.error || t('common.error'),
-          })
+          }),
+          'error'
         );
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      reportStatus(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setBusy(false);
     }
@@ -157,7 +183,15 @@ export function SettingsKnowledgeBase() {
             <FileText className="h-4 w-4" />
             {t('knowledgeBase.chooseFiles')}
           </button>
-          {status && <p className="mt-3 text-sm text-text-muted">{status}</p>}
+          {status && (
+            <p
+              className={`mt-3 text-sm ${
+                statusTone === 'error' ? 'text-red-500' : 'text-text-muted'
+              }`}
+            >
+              {status}
+            </p>
+          )}
         </div>
       </SettingsContentSection>
 
@@ -214,9 +248,10 @@ export function SettingsKnowledgeBase() {
               <button
                 key={node.nodeId}
                 type="button"
+                disabled={busy}
                 onClick={() => setSelectedNodeId(node.nodeId)}
                 title={`${node.logicalRef} ${node.title}`}
-                className={`block w-full min-w-0 border-b border-border-muted px-3 py-2 text-left text-sm ${selectedNode?.nodeId === node.nodeId ? 'bg-accent/10' : 'hover:bg-surface-hover'}`}
+                className={`block w-full min-w-0 border-b border-border-muted px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${selectedNode?.nodeId === node.nodeId ? 'bg-accent/10' : 'hover:bg-surface-hover'}`}
               >
                 <span className="block min-w-0 truncate font-medium text-text-primary">
                   {node.logicalRef}
@@ -237,8 +272,8 @@ export function SettingsKnowledgeBase() {
             </p>
             <p className="mt-3 break-words text-text-muted">
               {t('knowledgeBase.edgeCounts', {
-                resolved: overview?.graph.referenceEdgeCount ?? 0,
-                unresolved: overview?.graph.unresolvedReferenceCount ?? 0,
+                resolved: selectedNodeEdgeCounts.resolved,
+                unresolved: selectedNodeEdgeCounts.unresolved,
               })}
             </p>
           </div>

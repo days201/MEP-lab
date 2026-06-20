@@ -106,8 +106,11 @@ export async function parseDocumentWithDocling(
   return normalizeDoclingResult(parsed);
 }
 
-function resolveDefaultBridgePath(): string {
+export function resolveDefaultBridgePath(resourcesPath = process.resourcesPath): string {
   const candidates = [
+    ...(resourcesPath
+      ? [path.join(resourcesPath, 'mcp', 'building-code', 'docling_bridge.py')]
+      : []),
     path.join(__dirname, 'docling_bridge.py'),
     path.join(__dirname, 'building-code', 'docling_bridge.py'),
     path.resolve(process.cwd(), 'src/main/mcp/building-code/docling_bridge.py'),
@@ -116,13 +119,53 @@ function resolveDefaultBridgePath(): string {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
 }
 
+export function resolvePythonRootFromExecutable(pythonPath: string): string | null {
+  const normalized = path.normalize(pythonPath);
+  const base = path.basename(normalized).toLowerCase();
+  if (base !== 'python.exe' && base !== 'python3.exe' && base !== 'python' && base !== 'python3') {
+    return null;
+  }
+
+  const parent = path.dirname(normalized);
+  if (path.basename(parent).toLowerCase() === 'bin') {
+    return path.dirname(parent);
+  }
+
+  return parent;
+}
+
+export function buildDoclingSpawnEnv(
+  pythonPath: string,
+  baseEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  const pythonRoot = resolvePythonRootFromExecutable(pythonPath);
+  if (!pythonRoot) {
+    return { ...baseEnv };
+  }
+
+  const extraSite = path.join(pythonRoot, 'site-packages');
+  if (!fs.existsSync(extraSite)) {
+    return { ...baseEnv };
+  }
+
+  return {
+    ...baseEnv,
+    PYTHONHOME: pythonRoot,
+    PYTHONNOUSERSITE: '1',
+    PYTHONDONTWRITEBYTECODE: '1',
+    PYTHONUTF8: '1',
+    PYTHONPATH: [extraSite, baseEnv.PYTHONPATH].filter(Boolean).join(path.delimiter),
+  };
+}
+
 function runProcess(
   command: string,
   args: string[],
   options: DoclingProcessOptions = { timeoutMs: DEFAULT_DOCLING_TIMEOUT_MS }
 ): Promise<ProcessResult> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const env = buildDoclingSpawnEnv(command);
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env });
     let stdout = '';
     let stderr = '';
     let settled = false;

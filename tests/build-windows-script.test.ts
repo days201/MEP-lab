@@ -30,5 +30,8 @@ describe('build-windows helper', () => {
     const preparePython = fs.readFileSync(path.join(process.cwd(), 'scripts/prepare-python.js'), 'utf8');
     expect(preparePython).toContain('BUNDLED_PYTHON_PACKAGES');
     expect(preparePython).toContain("'docling'");
+    expect(preparePython).toContain('win32:');
+    expect(preparePython).toContain('x86_64-pc-windows-msvc');
+    expect(preparePython).not.toContain('Unsupported platform, skipping');
   });
 });

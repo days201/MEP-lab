@@ -132,6 +132,7 @@
     "uploadDescription": "Import local building-code files for the Building_Code MCP tools.",
     "chooseFiles": "Choose files",
     "uploadComplete": "Documents imported",
+    "dropFailed": "Could not read dropped files. Drag files from your computer, not from another app window.",
     "reparseAction": "Reparse",
     "reparseComplete": "Document reparsed",
     "revealSourceAction": "Reveal source",

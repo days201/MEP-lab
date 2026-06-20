@@ -34,6 +34,7 @@ import {
   MCP_SERVER_PRESETS,
   mcpConfigStore,
   resolveBuildingCodeRuntimeEnv,
+  resolveMcpServerRuntimeConfig,
 } from '../src/main/mcp/mcp-config-store';
 
 function makeOpenAIEmbeddingConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -133,5 +134,23 @@ describe('building-code MCP config preset', () => {
       BUILDING_CODE_EMBEDDING_MODEL: 'manual-model',
       BUILDING_CODE_EMBEDDING_TIMEOUT_MS: '12000',
     });
+  });
+
+  it('defaults BUILDING_CODE_INDEX_DIR for save/reconnect runtime config resolution', () => {
+    const runtimeConfig = resolveMcpServerRuntimeConfig({
+      id: 'mcp-building-code-test',
+      name: 'Building_Code',
+      type: 'stdio',
+      command: 'node',
+      args: ['building-code-server.js'],
+      enabled: true,
+      env: {
+        BUILDING_CODE_INDEX_DIR: '',
+      },
+    });
+
+    expect(runtimeConfig.env?.BUILDING_CODE_INDEX_DIR).toBe(
+      path.join('/tmp', 'knowledge-base', 'building-code', 'index')
+    );
   });
 });

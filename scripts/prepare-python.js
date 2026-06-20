@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Prepare a bundled Python runtime for MEP Lab (macOS/Linux).
+ * Prepare a bundled Python runtime for MEP Lab (macOS/Linux/Windows).
  *
  * Goal:
  * - Bundle a standalone python3 into `resources/python/darwin-{arch}/`
@@ -76,6 +76,13 @@ const TARGETS = {
       triple: 'x86_64-unknown-linux-gnu',
       platformTag: 'manylinux2014_x86_64',
       envUrlKey: 'OPEN_COWORK_PYTHON_STANDALONE_URL_LINUX_X64',
+    },
+  },
+  win32: {
+    x64: {
+      triple: 'x86_64-pc-windows-msvc',
+      platformTag: 'win_amd64',
+      envUrlKey: 'OPEN_COWORK_PYTHON_STANDALONE_URL_WIN32_X64',
     },
   },
 };
@@ -288,20 +295,44 @@ async function findStandaloneAssetUrl(triple, envUrlKey) {
   }
 }
 
-function getStripComponentsForArchive(archivePath) {
+function packagesForPlatform(platform) {
+  if (platform === 'win32') {
+    return BUNDLED_PYTHON_PACKAGES.filter((pkg) => !pkg.startsWith('pyobjc'));
+  }
+  return BUNDLED_PYTHON_PACKAGES;
+}
+
+function runtimeFingerprintForPlatform(platform) {
+  return packagesForPlatform(platform).join('|');
+}
+
+function resolvePythonBin(destDir, platform) {
+  return platform === 'win32'
+    ? path.join(destDir, 'python.exe')
+    : path.join(destDir, 'bin', 'python3');
+}
+
+function getStripComponentsForArchive(archivePath, platform) {
   const isZst = archivePath.endsWith('.tar.zst');
   const listCmd = isZst ? `tar --zstd -tf "${archivePath}"` : `tar -tzf "${archivePath}"`;
   const list = execSync(listCmd, { encoding: 'utf8' }).split('\n');
-  const python3Entry = list.find((p) => p.endsWith('/bin/python3'));
-  if (!python3Entry) {
-    throw new Error(`Could not locate bin/python3 in archive: ${archivePath}`);
+  const pythonEntry =
+    platform === 'win32'
+      ? list.find((entry) => /(?:^|\/)python\.exe$/i.test(entry.replace(/\\/g, '/')))
+      : list.find((entry) => entry.endsWith('/bin/python3'));
+  if (!pythonEntry) {
+    throw new Error(`Could not locate bundled Python executable in archive: ${archivePath}`);
   }
-  const prefix = python3Entry.replace(/\/bin\/python3$/, '').replace(/\/$/, '');
+  const normalized = pythonEntry.replace(/\\/g, '/');
+  const prefix =
+    platform === 'win32'
+      ? normalized.replace(/\/python\.exe$/i, '').replace(/\/$/, '')
+      : normalized.replace(/\/bin\/python3$/, '').replace(/\/$/, '');
   const parts = prefix.split('/').filter(Boolean);
   return parts.length;
 }
 
-function extractArchive(archivePath, destDir) {
+function extractArchive(archivePath, destDir, platform) {
   ensureDir(destDir);
   // Clean destination to avoid mixing different versions
   for (const entry of fs.readdirSync(destDir)) {
@@ -309,7 +340,7 @@ function extractArchive(archivePath, destDir) {
   }
 
   const isZst = archivePath.endsWith('.tar.zst');
-  const strip = getStripComponentsForArchive(archivePath);
+  const strip = getStripComponentsForArchive(archivePath, platform);
   const extractCmd = isZst
     ? `tar --zstd -xf "${archivePath}" -C "${destDir}" --strip-components=${strip}`
     : `tar -xzf "${archivePath}" -C "${destDir}" --strip-components=${strip}`;
@@ -325,11 +356,12 @@ function ensurePipAvailable(pythonBin) {
   }
 }
 
-function installPackages(siteDir, platformTag, pythonBin) {
+function installPackages(siteDir, platformTag, pythonBin, platform) {
   ensureDir(siteDir);
 
   const pipPython = process.env.OPEN_COWORK_PIP_PYTHON || pythonBin;
-  const packageSpecs = [...BUNDLED_PYTHON_PACKAGES];
+  const packageSpecs = packagesForPlatform(platform);
+  const runtimeFingerprint = runtimeFingerprintForPlatform(platform);
   const pythonRoot = path.resolve(siteDir, '..');
   const runtimeMarkerFile = resolveRuntimeVersionFile(pythonRoot);
   const runtimeMarker = exists(runtimeMarkerFile)
@@ -338,9 +370,9 @@ function installPackages(siteDir, platformTag, pythonBin) {
 
   // Avoid re-install if already present
   const hasPillow = exists(path.join(siteDir, 'PIL'));
-  const hasQuartz = exists(path.join(siteDir, 'Quartz'));
+  const hasQuartz = platform === 'win32' ? true : exists(path.join(siteDir, 'Quartz'));
   const hasDocling = exists(path.join(siteDir, 'docling'));
-  if (hasPillow && hasQuartz && hasDocling && runtimeMarker === BUNDLED_RUNTIME_FINGERPRINT) {
+  if (hasPillow && hasQuartz && hasDocling && runtimeMarker === runtimeFingerprint) {
     console.log(`✓ Python packages already present in ${siteDir}`);
     return;
   }
@@ -358,7 +390,7 @@ function installPackages(siteDir, platformTag, pythonBin) {
     `${packageSpecs.map((pkg) => JSON.stringify(pkg)).join(' ')}`;
 
   execSync(cmd, { stdio: 'inherit' });
-  fs.writeFileSync(runtimeMarkerFile, BUNDLED_RUNTIME_FINGERPRINT, 'utf-8');
+  fs.writeFileSync(runtimeMarkerFile, runtimeFingerprint, 'utf-8');
 }
 
 /**
@@ -483,7 +515,7 @@ async function preparePlatformArch(platform, arch) {
   if (!target) return;
 
   const destDir = path.join(OUTPUT_ROOT, `${platform}-${arch}`);
-  const pythonBin = path.join(destDir, 'bin', 'python3');
+  const pythonBin = resolvePythonBin(destDir, platform);
   const siteDir = path.join(destDir, 'site-packages');
 
   // Download + extract standalone python if missing
@@ -511,7 +543,7 @@ async function preparePlatformArch(platform, arch) {
     }
 
     console.log(`📦 Extracting to: ${destDir}`);
-    extractArchive(archivePath, destDir);
+    extractArchive(archivePath, destDir, platform);
 
     if (!exists(pythonBin)) {
       throw new Error(`Python extraction failed: ${pythonBin} not found`);
@@ -524,18 +556,13 @@ async function preparePlatformArch(platform, arch) {
   }
 
   // Install packages for GUI automation and Knowledge Base parsing
-  installPackages(siteDir, target.platformTag, pythonBin);
+  installPackages(siteDir, target.platformTag, pythonBin, platform);
 
   // Clean runtime files while preserving the installed package target set.
   cleanPythonRuntime(destDir, siteDir);
 }
 
 async function main() {
-  if (process.platform !== 'darwin' && process.platform !== 'linux') {
-    console.log('[prepare:python] Unsupported platform, skipping.');
-    return;
-  }
-
   ensureDir(OUTPUT_ROOT);
   ensureDir(DOWNLOAD_DIR);
 
