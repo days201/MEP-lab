@@ -77,6 +77,7 @@ export class KnowledgeBaseService {
 
   async uploadDocuments(filePaths: string[]): Promise<KnowledgeBaseOverview> {
     await ensureKnowledgeBaseStorage(this.paths);
+    let hasIndexableChange = false;
 
     for (const filePath of filePaths) {
       const record = await this.createQueuedRecord(filePath);
@@ -101,6 +102,7 @@ export class KnowledgeBaseService {
             diagnostic('info', 'parse', message, record.documentId)
           ),
         });
+        hasIndexableChange = true;
       } catch (error) {
         await this.registry.upsert({
           ...record,
@@ -111,6 +113,10 @@ export class KnowledgeBaseService {
           failureMessage: errorMessage(error),
         });
       }
+    }
+
+    if (!hasIndexableChange) {
+      return this.overviewFrom(await this.registry.list(), await this.loadActiveIndexOrEmpty());
     }
 
     return this.rebuildIndex();
@@ -157,6 +163,7 @@ export class KnowledgeBaseService {
         diagnostics: [diagnostic('error', 'parse', errorMessage(error), documentId)],
         failureMessage: errorMessage(error),
       });
+      return this.overviewFrom(await this.registry.list(), await this.loadActiveIndexOrEmpty());
     }
 
     return this.rebuildIndex();

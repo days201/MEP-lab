@@ -37,6 +37,24 @@ function parsed(): NormalizedDoclingResult {
   };
 }
 
+function activeIndexSnapshot(userData: string): {
+  indexFile: string;
+  vectorFile: string;
+  index: { nodes: unknown[]; semanticSearchAvailable: boolean };
+  vectors: { vectors: unknown[] };
+} {
+  const indexDir = path.join(userData, 'knowledge-base', 'building-code', 'index');
+  const indexFile = fs.readFileSync(path.join(indexDir, 'index.json'), 'utf8');
+  const vectorFile = fs.readFileSync(path.join(indexDir, 'vectors.json'), 'utf8');
+
+  return {
+    indexFile,
+    vectorFile,
+    index: JSON.parse(indexFile) as { nodes: unknown[]; semanticSearchAvailable: boolean },
+    vectors: JSON.parse(vectorFile) as { vectors: unknown[] },
+  };
+}
+
 describe('KnowledgeBaseService', () => {
   afterEach(() => {
     for (const root of roots.splice(0)) {
@@ -92,14 +110,105 @@ describe('KnowledgeBaseService', () => {
 
     await service.uploadDocuments([good]);
     const before = await service.getOverview();
+    const beforeIndex = activeIndexSnapshot(userData);
     shouldFail = true;
     const after = await service.uploadDocuments([bad]);
+    const afterIndex = activeIndexSnapshot(userData);
 
     expect(after.documents.find((document) => document.documentId === 'doc-bad')).toMatchObject({
       status: 'failed',
       failureMessage: 'parser exploded',
     });
     expect(after.summary.nodeCount).toBe(before.summary.nodeCount);
+    expect(after.summary.semanticSearchAvailable).toBe(true);
+    expect(afterIndex.index.nodes).toEqual(beforeIndex.index.nodes);
+    expect(afterIndex.index.semanticSearchAvailable).toBe(true);
+    expect(afterIndex.vectors.vectors).toEqual(beforeIndex.vectors.vectors);
+  });
+
+  it('preserves the prior active index when reparsing an active document fails', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
+    roots.push(userData);
+    const source = path.join(userData, 'input.md');
+    fs.writeFileSync(source, 'Section 9.10.3.1 Fire separations\nBody text.');
+    let shouldFail = false;
+    const service = new KnowledgeBaseService({
+      userDataPath: userData,
+      now: () => '2026-06-19T12:00:00.000Z',
+      randomId: () => 'doc-1',
+      parseDocument: async () => {
+        if (shouldFail) throw new Error('parser exploded');
+        return parsed();
+      },
+      embeddingClientFactory: () => ({
+        model: 'text-embedding-3-small',
+        embed: async (texts) => texts.map(() => [1, 0, 0]),
+      }),
+    });
+
+    await service.uploadDocuments([source]);
+    const before = await service.getOverview();
+    const beforeIndex = activeIndexSnapshot(userData);
+    shouldFail = true;
+    const after = await service.reparseDocument('doc-1');
+    const afterIndex = activeIndexSnapshot(userData);
+
+    expect(after.documents.find((document) => document.documentId === 'doc-1')).toMatchObject({
+      status: 'failed',
+      failureMessage: 'parser exploded',
+    });
+    expect(after.summary).toMatchObject({
+      nodeCount: before.summary.nodeCount,
+      semanticSearchAvailable: true,
+    });
+    expect(after.graph.nodes).toEqual(before.graph.nodes);
+    expect(afterIndex.index.nodes).toEqual(beforeIndex.index.nodes);
+    expect(afterIndex.index.semanticSearchAvailable).toBe(true);
+    expect(afterIndex.vectors.vectors).toEqual(beforeIndex.vectors.vectors);
+  });
+
+  it('does not rebuild the active index when a new document parse failure is the only batch change', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
+    roots.push(userData);
+    const good = path.join(userData, 'good.md');
+    const bad = path.join(userData, 'bad.md');
+    fs.writeFileSync(good, 'Section 9.10.3.1 Fire separations\nBody text.');
+    fs.writeFileSync(bad, 'No canonical headings here.');
+    let shouldFail = false;
+    const service = new KnowledgeBaseService({
+      userDataPath: userData,
+      now: () => '2026-06-19T12:00:00.000Z',
+      randomId: () => (shouldFail ? 'doc-bad' : 'doc-good'),
+      parseDocument: async () => {
+        if (shouldFail) throw new Error('parser exploded');
+        return parsed();
+      },
+      embeddingClientFactory: () => ({
+        model: 'text-embedding-3-small',
+        embed: async (texts) => {
+          if (shouldFail) throw new Error('embedding should not be called');
+          return texts.map(() => [1, 0, 0]);
+        },
+      }),
+    });
+
+    await service.uploadDocuments([good]);
+    const before = activeIndexSnapshot(userData);
+    expect(before.index.semanticSearchAvailable).toBe(true);
+    expect(before.vectors.vectors.length).toBeGreaterThan(0);
+    shouldFail = true;
+    const after = await service.uploadDocuments([bad]);
+    const afterIndex = activeIndexSnapshot(userData);
+
+    expect(after.documents.find((document) => document.documentId === 'doc-bad')).toMatchObject({
+      status: 'failed',
+      failureMessage: 'parser exploded',
+    });
+    expect(after.summary.semanticSearchAvailable).toBe(true);
+    expect(afterIndex.indexFile).toBe(before.indexFile);
+    expect(afterIndex.vectorFile).toBe(before.vectorFile);
+    expect(afterIndex.index.nodes).toHaveLength(before.index.nodes.length);
+    expect(afterIndex.vectors.vectors).toEqual(before.vectors.vectors);
   });
 
   it('marks embedding failures while preserving exact lookup records', async () => {
