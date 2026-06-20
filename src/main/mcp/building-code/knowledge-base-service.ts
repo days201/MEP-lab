@@ -187,11 +187,14 @@ export class KnowledgeBaseService {
       throw new Error(`Knowledge-base document not found: ${documentId}`);
     }
 
+    const registryBeforeRemoval = await this.registry.list();
     await this.registry.markRemoved(documentId, this.now());
     const rebuilt = await this.rebuildIndex();
 
     if (!rebuilt.committed) {
-      await this.registry.upsert(document);
+      for (const record of registryBeforeRemoval) {
+        await this.registry.upsert(record);
+      }
       return this.overviewFrom(await this.registry.list(), rebuilt.index);
     }
 

@@ -318,6 +318,43 @@ describe('KnowledgeBaseService', () => {
     expect(afterIndex.vectorFile).toBe(beforeIndex.vectorFile);
   });
 
+  it('restores all active registry records when removal rebuild fails canonicalization', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
+    roots.push(userData);
+    const sourceA = path.join(userData, 'a.md');
+    const sourceB = path.join(userData, 'b.md');
+    fs.writeFileSync(sourceA, 'Section 9.10.3.1 Fire separations\nBody text.');
+    fs.writeFileSync(sourceB, 'Section 9.11.1.1 Sound control\nBody text.');
+    let nextId = 0;
+    const service = new KnowledgeBaseService({
+      userDataPath: userData,
+      now: () => '2026-06-19T12:00:00.000Z',
+      randomId: () => `doc-${++nextId}`,
+      parseDocument: async () => parsed(),
+      embeddingClientFactory: () => ({
+        model: 'text-embedding-3-small',
+        embed: async (texts) => texts.map(() => [1, 0, 0]),
+      }),
+    });
+
+    await service.uploadDocuments([sourceA, sourceB]);
+    const before = await service.getOverview();
+    const beforeIndex = activeIndexSnapshot(userData);
+    fs.writeFileSync(
+      path.join(userData, 'knowledge-base', 'building-code', 'parsed', 'doc-2.json'),
+      `${JSON.stringify(parsedWithoutCanonicalHeadings(), null, 2)}\n`
+    );
+    const after = await service.removeDocument('doc-1');
+    const afterIndex = activeIndexSnapshot(userData);
+
+    expect(before.summary.nodeCount).toBe(2);
+    expect(after.summary).toEqual(before.summary);
+    expect(after.graph.nodes).toEqual(before.graph.nodes);
+    expect(after.documents).toEqual(before.documents);
+    expect(afterIndex.indexFile).toBe(beforeIndex.indexFile);
+    expect(afterIndex.vectorFile).toBe(beforeIndex.vectorFile);
+  });
+
   it('does not rebuild the active index when a new document parse failure is the only batch change', async () => {
     const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-service-'));
     roots.push(userData);

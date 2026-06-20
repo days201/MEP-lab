@@ -30,6 +30,10 @@ type BuildingCodeIndexFile = Omit<BuildingCodeIndex, 'vectors'>;
 
 const supportedVersion = 1;
 
+export interface SaveBuildingCodeIndexOptions {
+  afterIndexFilePromoted?: () => Promise<void> | void;
+}
+
 export function createEmptyBuildingCodeIndex(diagnostics: string[] = []): BuildingCodeIndex {
   return {
     version: supportedVersion,
@@ -86,18 +90,98 @@ export async function loadBuildingCodeIndex(indexDir: string): Promise<BuildingC
 
 export async function saveBuildingCodeIndex(
   indexDir: string,
-  index: BuildingCodeIndex
+  index: BuildingCodeIndex,
+  options: SaveBuildingCodeIndexOptions = {}
 ): Promise<void> {
   assertSupportedVersion(index.version);
   await fs.mkdir(indexDir, { recursive: true });
 
   const { vectors, ...indexFile } = index;
+  const indexPath = path.join(indexDir, 'index.json');
+  const vectorPath = path.join(indexDir, 'vectors.json');
+  const transactionId = `${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
+  const stagingDir = path.join(indexDir, `.publish-${transactionId}.staging`);
+  const backupDir = path.join(indexDir, `.publish-${transactionId}.backup`);
+  const stagedIndexPath = path.join(stagingDir, 'index.json');
+  const stagedVectorPath = path.join(stagingDir, 'vectors.json');
+  const backupIndexPath = path.join(backupDir, 'index.json');
+  const backupVectorPath = path.join(backupDir, 'vectors.json');
+  let indexBackedUp = false;
+  let vectorsBackedUp = false;
+  let indexPromoted = false;
+  let vectorsPromoted = false;
 
-  await writeJsonAtomically(path.join(indexDir, 'index.json'), indexFile);
-  await writeJsonAtomically(path.join(indexDir, 'vectors.json'), {
-    version: supportedVersion,
-    vectors,
-  });
+  try {
+    await fs.mkdir(stagingDir, { recursive: true });
+    await fs.mkdir(backupDir, { recursive: true });
+    await writeJsonAtomically(stagedIndexPath, indexFile);
+    await writeJsonAtomically(stagedVectorPath, {
+      version: supportedVersion,
+      vectors,
+    });
+    await loadBuildingCodeIndex(stagingDir);
+
+    indexBackedUp = await moveIfExists(indexPath, backupIndexPath);
+    vectorsBackedUp = await moveIfExists(vectorPath, backupVectorPath);
+
+    await fs.rename(stagedIndexPath, indexPath);
+    indexPromoted = true;
+    await options.afterIndexFilePromoted?.();
+    await fs.rename(stagedVectorPath, vectorPath);
+    vectorsPromoted = true;
+  } catch (error) {
+    await rollbackActiveIndexPublish({
+      indexPath,
+      vectorPath,
+      backupIndexPath,
+      backupVectorPath,
+      indexBackedUp,
+      vectorsBackedUp,
+      indexPromoted,
+      vectorsPromoted,
+    });
+    throw error;
+  } finally {
+    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => undefined);
+    await fs.rm(backupDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function moveIfExists(sourcePath: string, targetPath: string): Promise<boolean> {
+  try {
+    await fs.rename(sourcePath, targetPath);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+async function rollbackActiveIndexPublish(options: {
+  indexPath: string;
+  vectorPath: string;
+  backupIndexPath: string;
+  backupVectorPath: string;
+  indexBackedUp: boolean;
+  vectorsBackedUp: boolean;
+  indexPromoted: boolean;
+  vectorsPromoted: boolean;
+}): Promise<void> {
+  if (options.indexPromoted) {
+    await fs.rm(options.indexPath, { force: true }).catch(() => undefined);
+  }
+  if (options.vectorsPromoted) {
+    await fs.rm(options.vectorPath, { force: true }).catch(() => undefined);
+  }
+  if (options.indexBackedUp) {
+    await fs.rename(options.backupIndexPath, options.indexPath).catch(() => undefined);
+  }
+  if (options.vectorsBackedUp) {
+    await fs.rename(options.backupVectorPath, options.vectorPath).catch(() => undefined);
+  }
 }
 
 function assertSupportedVersion(version: unknown): asserts version is 1 {
@@ -251,6 +335,10 @@ function stringOrDefault(value: unknown, fallback: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }
 
 async function writeJsonAtomically(filePath: string, value: unknown): Promise<void> {

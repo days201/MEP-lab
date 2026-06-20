@@ -309,4 +309,56 @@ describe('building-code index store', () => {
     );
     await expect(loadBuildingCodeIndex(tempRoot)).resolves.toEqual(minimalIndex());
   });
+
+  it('restores the last good active index when publish fails after replacing index.json', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+    const prior = minimalIndex();
+    const next: BuildingCodeIndex = {
+      ...minimalIndex(),
+      nodes: [
+        {
+          nodeId: 'node-next',
+          sourceId: 'source-next',
+          documentId: 'doc-next',
+          nodeType: 'section',
+          logicalRef: 'Section 9.10.3.1',
+          title: 'Next section',
+          text: 'Next section text.',
+          pageRange: '1',
+          headingPath: ['Section 9.10.3.1 Next section'],
+          parentNodeId: null,
+          childNodeIds: [],
+          extractionConfidence: 1,
+          parser: {
+            name: 'docling',
+            version: '2.0.0',
+            sourceElementIds: ['h1'],
+            pageRange: '1',
+            boundingBoxes: [],
+          },
+        },
+      ],
+      vectors: [
+        {
+          chunkId: 'chunk-next',
+          embeddingModel: 'text-embedding-3-small',
+          embedding: [0, 1],
+          embeddingTextHash: 'sha256:next',
+        },
+      ],
+      diagnostics: ['next diagnostic'],
+    };
+
+    await saveBuildingCodeIndex(tempRoot, prior);
+    await expect(
+      saveBuildingCodeIndex(tempRoot, next, {
+        afterIndexFilePromoted: async () => {
+          throw new Error('simulated publish interruption');
+        },
+      })
+    ).rejects.toThrow('simulated publish interruption');
+
+    await expect(loadBuildingCodeIndex(tempRoot)).resolves.toEqual(prior);
+  });
 });
