@@ -71,6 +71,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@google/genai": "^1.44.0",
     "@larksuiteoapi/node-sdk": "^1.59.0",
+    "@llamaindex/liteparse": "2.1.2",
     "@mariozechner/pi-ai": "^0.60.0",
     "@mariozechner/pi-coding-agent": "^0.60.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
