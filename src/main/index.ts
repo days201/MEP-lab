@@ -179,23 +179,6 @@ async function waitForDevServer(url: string, maxAttempts = 30, intervalMs = 500)
   return false;
 }
 
-function resolveDoclingPythonPath(): string {
-  const configured = process.env.DOCLING_PYTHON_PATH?.trim();
-  if (configured) {
-    return configured;
-  }
-  const platform = process.platform;
-  const executable = platform === 'win32' ? 'python.exe' : 'python3';
-  const candidate = app.isPackaged
-    ? join(process.resourcesPath, 'python', platform === 'win32' ? executable : join('bin', executable))
-    : join(
-        __dirname,
-        '../../resources/python',
-        `${platform}-${process.arch}`,
-        platform === 'win32' ? executable : join('bin', executable)
-      );
-  return fs.existsSync(candidate) ? candidate : platform === 'win32' ? 'python' : 'python3';
-}
 
 // Single-instance lock: skip in dev mode so vite-plugin-electron can restart freely
 // without the old process blocking the new one during async cleanup.
@@ -861,7 +844,6 @@ app
     memoryService = new MemoryService(db);
     const knowledgeBaseOptions: KnowledgeBaseServiceOptions = {
       userDataPath: app.getPath('userData'),
-      pythonPath: resolveDoclingPythonPath(),
     };
     knowledgeBaseService = new KnowledgeBaseService(knowledgeBaseOptions);
     const extensionManager = new AgentRuntimeExtensionManager([new MemoryExtension(memoryService)]);

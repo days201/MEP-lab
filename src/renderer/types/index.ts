@@ -787,4 +787,6 @@ export type {
   KnowledgeBaseDiagnostic,
   KnowledgeBaseGraphSummary,
   KnowledgeBaseIndexSummary,
+  KnowledgeBaseParseProgress,
+  KnowledgeBaseParserName,
 } from '../../shared/ipc-types';
