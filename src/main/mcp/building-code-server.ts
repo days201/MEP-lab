@@ -1,12 +1,12 @@
-import fs from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { createOpenAIEmbeddingClient, embedMissingChunks } from './building-code/embedding';
-import { ingestMarkdownFixture } from './building-code/ingest';
+import { createOpenAIEmbeddingClient } from './building-code/embedding';
 import { loadBuildingCodeIndex, type BuildingCodeIndex } from './building-code/index-store';
 import {
+  BuildingCodeSemanticSearchUnavailableError,
   lookupTable,
   readSection,
   resolveCrossRefsForNode,
@@ -22,22 +22,6 @@ interface ToolDefinition {
   inputSchema: Record<string, unknown>;
 }
 
-const fixtureRelativePath = 'building-code/fixtures/nbc-2025-refrigerant-excerpt.md';
-
-class FixtureEmbeddingClient {
-  model = 'fixture-keyword-embedding';
-
-  async embed(texts: string[]): Promise<number[][]> {
-    return texts.map((text) => [
-      keywordScore(text, /r-32/i),
-      keywordScore(text, /edvc/i),
-      keywordScore(text, /flammab/i),
-      keywordScore(text, /table\s+7\.3\.1/i),
-      keywordScore(text, /section\s+7\.2/i),
-    ]);
-  }
-}
-
 export function listBuildingCodeTools(): ToolDefinition[] {
   return [
     {
@@ -48,7 +32,6 @@ export function listBuildingCodeTools(): ToolDefinition[] {
         properties: {
           query: { type: 'string' },
           limit: { type: 'number' },
-          fixture: { type: 'boolean' },
         },
         required: ['query'],
       },
@@ -61,7 +44,6 @@ export function listBuildingCodeTools(): ToolDefinition[] {
         properties: {
           ref: { type: 'string' },
           includeChildren: { type: 'boolean' },
-          fixture: { type: 'boolean' },
         },
         required: ['ref'],
       },
@@ -74,7 +56,6 @@ export function listBuildingCodeTools(): ToolDefinition[] {
         properties: {
           ref: { type: 'string' },
           depth: { type: 'number', enum: [1, 2] },
-          fixture: { type: 'boolean' },
         },
         required: ['ref'],
       },
@@ -88,7 +69,6 @@ export function listBuildingCodeTools(): ToolDefinition[] {
           ref: { type: 'string' },
           filters: { type: 'object' },
           query: { type: 'string' },
-          fixture: { type: 'boolean' },
         },
         required: ['ref'],
       },
@@ -100,15 +80,16 @@ export async function handleBuildingCodeTool(
   name: string,
   args: Record<string, unknown> = {}
 ): Promise<{ content: Array<{ type: 'text'; text: string }> } & BuildingCodeToolResult> {
-  const index = await loadIndex(Boolean(args.fixture));
+  const index = await loadIndex();
   let result: BuildingCodeToolResult;
 
   switch (name) {
     case 'search':
+      assertSemanticSearchAvailable(index);
       result = await searchBuildingCode(index, {
         query: requireString(args.query, 'query'),
         limit: typeof args.limit === 'number' ? args.limit : undefined,
-        embeddingClient: Boolean(args.fixture) ? new FixtureEmbeddingClient() : createOpenAIEmbeddingClient(),
+        embeddingClient: createOpenAIEmbeddingClient(),
       });
       break;
     case 'read_section':
@@ -159,59 +140,30 @@ export function createFromBuildingCodePreset(): {
   };
 }
 
-async function loadIndex(useFixture: boolean): Promise<BuildingCodeIndex> {
-  if (useFixture) {
-    return loadFixtureIndex();
-  }
-
+async function loadIndex(): Promise<BuildingCodeIndex> {
   const indexDir = process.env.BUILDING_CODE_INDEX_DIR;
   if (!indexDir) {
-    throw new Error('BUILDING_CODE_INDEX_DIR is required unless fixture=true');
+    throw new Error('Building_Code knowledge base is empty. Upload documents in Settings > Knowledge Base.');
   }
-
-  return loadBuildingCodeIndex(indexDir);
-}
-
-async function loadFixtureIndex(): Promise<BuildingCodeIndex> {
-  const markdown = fs.readFileSync(resolveFixturePath(), 'utf8');
-  const index: BuildingCodeIndex = {
-    version: 1,
-    ...ingestMarkdownFixture(markdown, {
-      sourceId: 'ashrae-15-2022-synthetic',
-      codeFamily: 'ASHRAE 15',
-      edition: '2022',
-      jurisdictionScope: 'synthetic-fixture',
-      sourceTitle: 'ASHRAE 15 2022 Synthetic Excerpt',
-      sourceUrl: 'fixture://nbc-2025-refrigerant-excerpt.md',
-    }),
-    vectors: [],
-    semanticSearchAvailable: true,
-  };
-
-  await embedMissingChunks(index, new FixtureEmbeddingClient());
-
-  return index;
-}
-
-function resolveFixturePath(): string {
-  const candidates = [
-    path.join(__dirname, fixtureRelativePath),
-    path.resolve(__dirname, '../src/main/mcp', fixtureRelativePath),
-    path.resolve(process.cwd(), 'src/main/mcp', fixtureRelativePath),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
+  try {
+    return await loadBuildingCodeIndex(indexDir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error('Building_Code knowledge base is empty. Upload documents in Settings > Knowledge Base.');
     }
+    throw error;
   }
+}
 
-  throw new Error(`Building-code fixture not found: ${fixtureRelativePath}`);
+function assertSemanticSearchAvailable(index: BuildingCodeIndex): void {
+  if (!index.semanticSearchAvailable || index.vectors.length === 0) {
+    throw new BuildingCodeSemanticSearchUnavailableError();
+  }
 }
 
 function getBuildingCodeServerPath(): string {
   const jsPath = path.resolve(__dirname, '../../dist-mcp/building-code-server.js');
-  if (fs.existsSync(jsPath)) {
+  if (existsSync(jsPath)) {
     return jsPath;
   }
 
@@ -234,10 +186,6 @@ function stringRecord(value: Record<string, unknown>): Record<string, string> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function keywordScore(text: string, pattern: RegExp): number {
-  return pattern.test(text) ? 1 : 0;
 }
 
 function createServer(): Server {

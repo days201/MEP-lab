@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -106,6 +107,7 @@ describe('building-code MCP config preset', () => {
     const env = resolveBuildingCodeRuntimeEnv({}, makeOpenAIEmbeddingConfig());
 
     expect(env).toMatchObject({
+      BUILDING_CODE_INDEX_DIR: path.join('/tmp', 'knowledge-base', 'building-code', 'index'),
       BUILDING_CODE_EMBEDDING_API_KEY: 'sk-memory-embedding',
       BUILDING_CODE_EMBEDDING_BASE_URL: 'https://embedding.example.test/v1',
       BUILDING_CODE_EMBEDDING_MODEL: 'embedding-model',
@@ -116,6 +118,7 @@ describe('building-code MCP config preset', () => {
   it('keeps explicit Building_Code embedding env over inherited memory settings', () => {
     const env = resolveBuildingCodeRuntimeEnv(
       {
+        BUILDING_CODE_INDEX_DIR: '/manual/index',
         BUILDING_CODE_EMBEDDING_API_KEY: 'sk-manual',
         BUILDING_CODE_EMBEDDING_BASE_URL: 'https://manual.example.test/v1',
         BUILDING_CODE_EMBEDDING_MODEL: 'manual-model',
@@ -124,6 +127,7 @@ describe('building-code MCP config preset', () => {
     );
 
     expect(env).toMatchObject({
+      BUILDING_CODE_INDEX_DIR: '/manual/index',
       BUILDING_CODE_EMBEDDING_API_KEY: 'sk-manual',
       BUILDING_CODE_EMBEDDING_BASE_URL: 'https://manual.example.test/v1',
       BUILDING_CODE_EMBEDDING_MODEL: 'manual-model',

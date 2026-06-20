@@ -12,6 +12,7 @@ import {
 } from '../config/auth-utils';
 import { resolveMemoryModelRuntimeConfig } from '../memory/memory-runtime-config';
 import { log, logError } from '../utils/logger';
+import { buildKnowledgeBaseStoragePaths } from './building-code/storage';
 
 /**
  * Preset MCP Server Configurations
@@ -120,6 +121,16 @@ export function resolveBuildingCodeRuntimeEnv(
     provider === 'ollama' ||
     (provider === 'custom' && protocol === 'openai');
   const nextEnv = { ...env };
+
+  try {
+    withFallbackEnv(
+      nextEnv,
+      'BUILDING_CODE_INDEX_DIR',
+      buildKnowledgeBaseStoragePaths(app.getPath('userData')).indexDir
+    );
+  } catch {
+    // app.getPath can fail in isolated unit tests before Electron app is ready.
+  }
 
   if (!isOpenAICompatible) {
     return nextEnv;

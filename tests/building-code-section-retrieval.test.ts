@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { embedMissingChunks } from '../src/main/mcp/building-code/embedding';
 import { ingestMarkdownFixture } from '../src/main/mcp/building-code/ingest';
+import type { BuildingCodeIndex } from '../src/main/mcp/building-code/index-store';
 import { readSection, searchBuildingCode } from '../src/main/mcp/building-code/retrieval';
 
 const fixturePath = path.resolve(
@@ -23,9 +24,9 @@ class FakeEmbeddingClient {
   }
 }
 
-async function fixtureIndex() {
+async function fixtureIndex(): Promise<BuildingCodeIndex> {
   const markdown = fs.readFileSync(fixturePath, 'utf8');
-  const index = {
+  const index: BuildingCodeIndex = {
     version: 1 as const,
     ...ingestMarkdownFixture(markdown, {
       sourceId: 'ashrae-15-2022-synthetic',
@@ -36,8 +37,10 @@ async function fixtureIndex() {
       sourceUrl: 'fixture://nbc-2025-refrigerant-excerpt.md',
     }),
     vectors: [],
+    semanticSearchAvailable: false,
   };
   index.vectors = await embedMissingChunks(index, new FakeEmbeddingClient());
+  index.semanticSearchAvailable = true;
 
   return index;
 }

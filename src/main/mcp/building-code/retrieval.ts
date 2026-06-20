@@ -1,6 +1,6 @@
 import { buildCitation } from './hierarchy';
 import type { BuildingCodeEmbeddingClient } from './embedding';
-import type { BuildingCodeIndex } from './index-store';
+import { isBuildingCodeIndexEmpty, type BuildingCodeIndex } from './index-store';
 import type {
   BuildingCodeEvidence,
   CodeCrossReferenceRecord,
@@ -47,10 +47,29 @@ interface CandidateScore {
   score: number;
 }
 
+export class EmptyBuildingCodeIndexError extends Error {
+  constructor() {
+    super('Building_Code knowledge base is empty. Upload documents in Settings > Knowledge Base.');
+    this.name = 'EmptyBuildingCodeIndexError';
+  }
+}
+
+export class BuildingCodeSemanticSearchUnavailableError extends Error {
+  constructor() {
+    super('Building_Code semantic search is unavailable because embeddings are not available for the active index.');
+    this.name = 'BuildingCodeSemanticSearchUnavailableError';
+  }
+}
+
 export async function searchBuildingCode(
   index: BuildingCodeIndex,
   input: SearchBuildingCodeInput
 ): Promise<BuildingCodeToolResult> {
+  assertReadableIndex(index);
+  if (!index.semanticSearchAvailable || index.vectors.length === 0) {
+    throw new BuildingCodeSemanticSearchUnavailableError();
+  }
+
   const [queryEmbedding] = await input.embeddingClient.embed([input.query]);
   const limit = clampLimit(input.limit);
   const candidateScores = semanticCandidateSearch(
@@ -110,6 +129,7 @@ export function semanticCandidateSearch(
 }
 
 export function readSection(index: BuildingCodeIndex, input: ReadSectionInput): BuildingCodeToolResult {
+  assertReadableIndex(index);
   const node = resolveNode(index, input.ref);
   const nodes = input.includeChildren
     ? [node, ...node.childNodeIds.map((nodeId) => resolveNode(index, nodeId))]
@@ -125,6 +145,7 @@ export function resolveCrossRefsForNode(
   index: BuildingCodeIndex,
   input: ResolveCrossRefsInput
 ): BuildingCodeToolResult {
+  assertReadableIndex(index);
   const startNode = resolveNode(index, input.ref);
   const maxDepth = input.depth === 2 ? 2 : 1;
   const visited = new Set<string>([startNode.nodeId]);
@@ -140,6 +161,7 @@ export function resolveCrossRefsForNode(
 }
 
 export function lookupTable(index: BuildingCodeIndex, input: LookupTableInput): BuildingCodeToolResult {
+  assertReadableIndex(index);
   const table = resolveTable(index, input.ref);
   const tableNode = resolveNode(index, table.nodeId);
   const matchingRows = table.rows.filter((row) => rowMatchesFilters(table, row.cells, input.filters));
@@ -170,6 +192,12 @@ export function lookupTable(index: BuildingCodeIndex, input: LookupTableInput): 
     ],
     diagnostics: diagnostics(),
   };
+}
+
+function assertReadableIndex(index: BuildingCodeIndex): void {
+  if (isBuildingCodeIndexEmpty(index)) {
+    throw new EmptyBuildingCodeIndexError();
+  }
 }
 
 function collectCrossRefs(
