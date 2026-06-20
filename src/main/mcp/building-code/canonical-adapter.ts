@@ -41,7 +41,7 @@ export function adaptDoclingToBuildingCodeIndex(
   }));
   const nodes = buildNodes(parsed, source, document);
 
-  if (nodes.length === 0) {
+  if (!hasStructuralBuildingCodeHeading(nodes)) {
     throw new Error('no canonical building-code sections found');
   }
 
@@ -58,6 +58,12 @@ export function adaptDoclingToBuildingCodeIndex(
     crossReferences,
     diagnostics: parsed.diagnostics,
   };
+}
+
+function hasStructuralBuildingCodeHeading(nodes: CodeNodeRecord[]): boolean {
+  return nodes.some((node) =>
+    node.nodeType === 'section' || node.nodeType === 'subsection' || node.nodeType === 'appendix'
+  );
 }
 
 function buildNodes(

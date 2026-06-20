@@ -480,4 +480,52 @@ describe('building-code canonical adapter', () => {
       )
     ).toThrow('no canonical building-code sections found');
   });
+
+  it('fails table-only documents with no structural building-code headings', () => {
+    expect(() =>
+      adaptDoclingToBuildingCodeIndex(
+        {
+          ...parsedDocument(),
+          pages: [
+            {
+              pageNumber: 1,
+              text: 'Overview\nTable 9.10.3.1 Ratings\nType | Rating\nWall | 1 h',
+            },
+          ],
+          elements: [
+            {
+              elementId: 'intro',
+              kind: 'text',
+              text: 'Overview material without canonical headings',
+              pageNumber: 1,
+              level: null,
+              confidence: 0.99,
+              bbox: null,
+            },
+            {
+              elementId: 'table-body',
+              kind: 'table',
+              text: 'Type | Rating\nWall | 1 h',
+              pageNumber: 1,
+              level: null,
+              confidence: 0.96,
+              bbox: null,
+            },
+          ],
+          tables: [
+            {
+              elementId: 'table-body',
+              caption: 'Table 9.10.3.1 Ratings',
+              pageNumber: 1,
+              columns: ['Type', 'Rating'],
+              rows: [['Wall', '1 h']],
+              notes: [],
+              confidence: 0.96,
+            },
+          ],
+        },
+        documentRecord()
+      )
+    ).toThrow('no canonical building-code sections found');
+  });
 });
