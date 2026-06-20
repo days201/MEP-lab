@@ -83,6 +83,24 @@ describe('building-code citation contract', () => {
     expect(() => assertCitedEvidence(brokenEvidence)).toThrow('citation');
   });
 
+  it('accepts LiteParse citation parser provenance with required source fields', () => {
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          parser: {
+            name: 'liteparse',
+            version: '2.0.0-liteparse',
+            sourceElementIds: ['page-12-block-3'],
+            pageRange: '12',
+            boundingBoxes: [{ pageNumber: 12, x: 10, y: 20, width: 300, height: 24 }],
+          },
+        },
+      })
+    ).not.toThrow();
+  });
+
   it('rejects invalid citation and evidence enum values at runtime', () => {
     expect(() =>
       assertCitedEvidence({
@@ -159,6 +177,15 @@ describe('building-code citation contract', () => {
         citation: {
           ...sectionEvidence.citation,
           parser: { ...sectionEvidence.citation.parser, name: undefined },
+        },
+      })
+    ).toThrow('citation.parser.name');
+    expect(() =>
+      assertCitedEvidence({
+        ...sectionEvidence,
+        citation: {
+          ...sectionEvidence.citation,
+          parser: { ...sectionEvidence.citation.parser, name: 'unknown-parser' },
         },
       })
     ).toThrow('citation.parser.name');
