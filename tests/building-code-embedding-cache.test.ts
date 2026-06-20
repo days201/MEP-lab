@@ -142,6 +142,32 @@ describe('building-code embedding cache', () => {
     ).toHaveLength(1);
   });
 
+  it('prunes stale duplicate vectors when the current vector already exists', async () => {
+    const fakeClient = new FakeEmbeddingClient();
+    const index = fixtureIndex();
+    const [currentChunk, ...remainingChunks] = index.chunks;
+    const currentVector: CodeVectorRecord = {
+      chunkId: currentChunk.chunkId,
+      embeddingModel: fakeClient.model,
+      embedding: [0.25, 0.5, 0.75],
+      embeddingTextHash: currentChunk.embeddingCacheKey,
+    };
+    const staleVector: CodeVectorRecord = {
+      chunkId: 'stale-chunk-id',
+      embeddingModel: fakeClient.model,
+      embedding: [0.25, 0.5, 0.75],
+      embeddingTextHash: currentChunk.embeddingCacheKey,
+    };
+
+    index.vectors.push(currentVector, staleVector);
+
+    await embedMissingChunks(index, fakeClient);
+
+    expect(fakeClient.calls).toEqual(remainingChunks.map((chunk) => chunk.text));
+    expect(index.vectors).toContainEqual(currentVector);
+    expect(index.vectors).not.toContainEqual(staleVector);
+  });
+
   it('uses stable embedding cache keys across rebuilds for unchanged source checksum, node id, text, and model', () => {
     const first = fixtureIndex();
     const second = fixtureIndex();

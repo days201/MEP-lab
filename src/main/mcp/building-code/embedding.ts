@@ -94,12 +94,13 @@ export async function embedMissingChunks(
 
   for (const chunk of index.chunks) {
     const chunkVectorKey = vectorChunkKey(chunk.embeddingCacheKey, client.model, chunk.chunkId);
+    const reusableVectorKey = vectorKey(chunk.embeddingCacheKey, client.model);
 
     if (existingChunks.has(chunkVectorKey)) {
+      relinkedVectorKeys.add(reusableVectorKey);
       continue;
     }
 
-    const reusableVectorKey = vectorKey(chunk.embeddingCacheKey, client.model);
     const reusable = reusableVectors.get(reusableVectorKey);
 
     if (reusable) {
@@ -116,7 +117,7 @@ export async function embedMissingChunks(
     missingChunks.push(chunk);
   }
 
-  if (missingChunks.length === 0 && relinked.length === 0) {
+  if (missingChunks.length === 0 && relinked.length === 0 && relinkedVectorKeys.size === 0) {
     return [];
   }
 
