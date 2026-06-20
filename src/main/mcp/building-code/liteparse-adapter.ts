@@ -98,17 +98,26 @@ export async function parseDocumentWithLiteParse(
   });
   const nativeDocument = normalizeLiteParseResult(nativeRaw);
   const qualityScores = scoreNativePages(nativeDocument);
-  const pageDiagnostics = pageDiagnosticsFromScores(qualityScores, nativeDocument.pages);
-  const suspiciousPages = qualityScores
+  const allSuspiciousPages = qualityScores
     .filter((score) => score.suspicious)
-    .map((score) => score.pageNumber)
-    .slice(0, input.ocrPageBudget ?? DEFAULT_OCR_PAGE_BUDGET);
+    .map((score) => score.pageNumber);
+  const ocrPageBudget = Math.max(0, input.ocrPageBudget ?? DEFAULT_OCR_PAGE_BUDGET);
+  const suspiciousPages = allSuspiciousPages.slice(0, ocrPageBudget);
+  const budgetSkippedPageNumbers = new Set(allSuspiciousPages.slice(ocrPageBudget));
+  const budgetSkippedDiagnostics = Array.from(budgetSkippedPageNumbers).map(
+    (pageNumber) => `OCR skipped for suspicious page ${pageNumber}: OCR page budget exhausted.`
+  );
+  const pageDiagnostics = markBudgetSkippedPageDiagnostics(
+    pageDiagnosticsFromScores(qualityScores, nativeDocument.pages),
+    budgetSkippedPageNumbers
+  );
 
   if (suspiciousPages.length === 0) {
     return normalizeParserDocument({
       ...nativeDocument,
       diagnostics: [
         ...nativeDocument.diagnostics,
+        ...budgetSkippedDiagnostics,
         `Parsed ${nativeDocument.pages.length} pages. OCR used on 0 pages.`,
       ],
       pageDiagnostics,
@@ -136,6 +145,7 @@ export async function parseDocumentWithLiteParse(
   let mergedDocument = nativeDocument;
   let successfulOcrPages = 0;
   const successfulOcrPageNumbers = new Set<number>();
+  const omittedBatchOcrPageNumbers = new Set<number>();
 
   try {
     const ocrRaw = await executor({ filePath: input.filePath, options: ocrOptions });
@@ -145,7 +155,16 @@ export async function parseDocumentWithLiteParse(
       successfulOcrPageNumbers.add(pageNumber);
     }
     successfulOcrPages = successfulOcrPageNumbers.size;
-  } catch {
+    for (const pageNumber of suspiciousPages) {
+      if (!successfulOcrPageNumbers.has(pageNumber)) {
+        omittedBatchOcrPageNumbers.add(pageNumber);
+        diagnostics.push(
+          `OCR produced no result for suspicious page ${pageNumber}; native extraction preserved.`
+        );
+      }
+    }
+  } catch (error) {
+    diagnostics.push(`OCR batch failed: ${errorMessage(error)}`);
     for (const pageNumber of suspiciousPages) {
       try {
         const pageRaw = await executor({
@@ -179,12 +198,22 @@ export async function parseDocumentWithLiteParse(
           message: 'LiteParse OCR merged for suspicious page',
         }
       : diagnostic
+  ).map((diagnostic) =>
+    omittedBatchOcrPageNumbers.has(diagnostic.pageNumber)
+      ? {
+          ...diagnostic,
+          extractionMode: 'native',
+          severity: 'warning',
+          message: 'LiteParse OCR produced no result; native extraction preserved',
+        }
+      : diagnostic
   );
 
   return normalizeParserDocument({
     ...mergedDocument,
     diagnostics: [
       ...diagnostics,
+      ...budgetSkippedDiagnostics,
       `Parsed ${nativeDocument.pages.length} pages. OCR used on ${successfulOcrPages} pages.`,
     ],
     pageDiagnostics: updatedPageDiagnostics,
@@ -230,23 +259,68 @@ export function mergeLiteParseOcrPages(
       return nativePage;
     }
 
+    if (nativePage.text.trim().length === 0) {
+      return {
+        ...ocrPage,
+        extractionMode: 'ocr',
+      };
+    }
+
     return {
-      ...ocrPage,
-      extractionMode: nativePage.text.trim().length > 0 ? 'native_plus_ocr' : 'ocr',
+      ...nativePage,
+      text: mergePageText(nativePage.text, ocrPage.text),
+      extractionMode: 'native_plus_ocr',
+      boundingBoxes: mergeBoundingBoxes(nativePage.boundingBoxes, ocrPage.boundingBoxes),
     };
   });
 
   const selectedPagesWithOcr = new Set(
     selectedPageNumbers.filter((pageNumber) => ocrPagesByNumber.has(pageNumber))
   );
-  const elements = [
-    ...nativeDocument.elements.filter((element) => !selectedPagesWithOcr.has(element.pageNumber)),
-    ...ocrDocument.elements.filter((element) => selectedPagesWithOcr.has(element.pageNumber)),
-  ].sort(comparePageElementOrder);
-  const tables = [
-    ...nativeDocument.tables.filter((table) => !selectedPagesWithOcr.has(table.pageNumber)),
-    ...ocrDocument.tables.filter((table) => selectedPagesWithOcr.has(table.pageNumber)),
-  ].sort((left, right) => left.pageNumber - right.pageNumber);
+  const nativeElementsByPage = groupByPageNumber(nativeDocument.elements);
+  const ocrElementsByPage = groupByPageNumber(ocrDocument.elements);
+  const nativeTablesByPage = groupByPageNumber(nativeDocument.tables);
+  const ocrTablesByPage = groupByPageNumber(ocrDocument.tables);
+  const ocrElementIdRemaps = new Map<string, string>();
+
+  const elements = nativeDocument.pages
+    .flatMap((page) => {
+      const nativeElements = nativeElementsByPage.get(page.pageNumber) ?? [];
+      if (!selectedPagesWithOcr.has(page.pageNumber)) {
+        return nativeElements;
+      }
+
+      const ocrElements = ocrElementsByPage.get(page.pageNumber) ?? [];
+      if (!pageHadNativeText(nativeDocument, page.pageNumber)) {
+        for (const element of ocrElements) {
+          ocrElementIdRemaps.set(
+            elementIdentityKey(element.pageNumber, element.elementId),
+            element.elementId
+          );
+        }
+        return ocrElements;
+      }
+
+      return mergePageElements(nativeElements, ocrElements, ocrElementIdRemaps);
+    })
+    .sort(comparePageElementOrder);
+  const tables = nativeDocument.pages
+    .flatMap((page) => {
+      const nativeTables = nativeTablesByPage.get(page.pageNumber) ?? [];
+      if (!selectedPagesWithOcr.has(page.pageNumber)) {
+        return nativeTables;
+      }
+
+      const ocrTables = (ocrTablesByPage.get(page.pageNumber) ?? []).map((table) =>
+        remapOcrTableElementId(table, ocrElementIdRemaps)
+      );
+      if (!pageHadNativeText(nativeDocument, page.pageNumber)) {
+        return ocrTables;
+      }
+
+      return mergePageTables(nativeTables, ocrTables);
+    })
+    .sort((left, right) => left.pageNumber - right.pageNumber);
 
   return normalizeParserDocument({
     ...nativeDocument,
@@ -564,6 +638,25 @@ function pageDiagnosticsFromScores(
   }));
 }
 
+function markBudgetSkippedPageDiagnostics(
+  pageDiagnostics: ParserPageDiagnostic[],
+  budgetSkippedPageNumbers: Set<number>
+): ParserPageDiagnostic[] {
+  if (budgetSkippedPageNumbers.size === 0) {
+    return pageDiagnostics;
+  }
+
+  return pageDiagnostics.map((diagnostic) =>
+    budgetSkippedPageNumbers.has(diagnostic.pageNumber)
+      ? {
+          ...diagnostic,
+          message: 'LiteParse OCR skipped for suspicious page due to OCR page budget',
+          reasons: [...diagnostic.reasons, 'OCR page budget exhausted'],
+        }
+      : diagnostic
+  );
+}
+
 function estimateImageAreaRatio(page: NormalizedParserPage): number {
   const charCount = page.text.replace(/\s/g, '').length;
   return charCount < 20 ? 1 : 0;
@@ -587,6 +680,204 @@ function mergedOcrPageNumbers(
 
 function pageHadNativeText(document: NormalizedLiteParseDocument, pageNumber: number): boolean {
   return (document.pages.find((page) => page.pageNumber === pageNumber)?.text.trim().length ?? 0) > 0;
+}
+
+function mergePageText(nativeText: string, ocrText: string): string {
+  const nativeTrimmed = nativeText.trim();
+  const ocrTrimmed = ocrText.trim();
+
+  if (nativeTrimmed.length === 0) {
+    return ocrText;
+  }
+  if (ocrTrimmed.length === 0 || nativeTrimmed === ocrTrimmed) {
+    return nativeText;
+  }
+
+  const nativeLineKeys = new Set(nativeText.split(/\r?\n/).map(normalizeTextForDedupe));
+  const appendedOcrLines = ocrText
+    .split(/\r?\n/)
+    .filter((line) => {
+      const lineKey = normalizeTextForDedupe(line);
+      return lineKey.length > 0 && !nativeLineKeys.has(lineKey);
+    });
+
+  if (appendedOcrLines.length === 0) {
+    return nativeText;
+  }
+
+  return `${nativeText.trimEnd()}\n${appendedOcrLines.join('\n').trimStart()}`;
+}
+
+function mergeBoundingBoxes(
+  nativeBoxes: NormalizedParserPage['boundingBoxes'],
+  ocrBoxes: NormalizedParserPage['boundingBoxes']
+): NormalizedParserPage['boundingBoxes'] {
+  const seen = new Set<string>();
+  const merged: NormalizedParserPage['boundingBoxes'] = [];
+
+  for (const box of [...nativeBoxes, ...ocrBoxes]) {
+    const key = boundingBoxKey(box);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    merged.push(box);
+  }
+
+  return merged;
+}
+
+function groupByPageNumber<T extends { pageNumber: number }>(items: T[]): Map<number, T[]> {
+  const grouped = new Map<number, T[]>();
+
+  for (const item of items) {
+    const pageItems = grouped.get(item.pageNumber) ?? [];
+    pageItems.push(item);
+    grouped.set(item.pageNumber, pageItems);
+  }
+
+  return grouped;
+}
+
+function mergePageElements(
+  nativeElements: NormalizedParserElement[],
+  ocrElements: NormalizedParserElement[],
+  ocrElementIdRemaps: Map<string, string>
+): NormalizedParserElement[] {
+  const merged: NormalizedParserElement[] = [];
+  const usedElementIds = new Set<string>();
+  const signatureToElementId = new Map<string, string>();
+
+  for (const element of nativeElements) {
+    merged.push(element);
+    usedElementIds.add(element.elementId);
+    signatureToElementId.set(elementSignature(element), element.elementId);
+  }
+
+  for (const element of ocrElements) {
+    const signature = elementSignature(element);
+    const existingElementId = signatureToElementId.get(signature);
+    if (existingElementId) {
+      ocrElementIdRemaps.set(
+        elementIdentityKey(element.pageNumber, element.elementId),
+        existingElementId
+      );
+      continue;
+    }
+
+    const mergedElement = usedElementIds.has(element.elementId)
+      ? {
+          ...element,
+          elementId: uniqueElementId(`${element.elementId}-ocr`, usedElementIds),
+        }
+      : element;
+
+    merged.push(mergedElement);
+    usedElementIds.add(mergedElement.elementId);
+    signatureToElementId.set(signature, mergedElement.elementId);
+    ocrElementIdRemaps.set(
+      elementIdentityKey(element.pageNumber, element.elementId),
+      mergedElement.elementId
+    );
+  }
+
+  return merged;
+}
+
+function mergePageTables(
+  nativeTables: NormalizedParserTable[],
+  ocrTables: NormalizedParserTable[]
+): NormalizedParserTable[] {
+  const merged: NormalizedParserTable[] = [];
+  const usedElementIds = new Set<string>();
+  const signatures = new Set<string>();
+
+  for (const table of nativeTables) {
+    merged.push(table);
+    usedElementIds.add(table.elementId);
+    signatures.add(tableSignature(table));
+  }
+
+  for (const table of ocrTables) {
+    const signature = tableSignature(table);
+    if (signatures.has(signature)) {
+      continue;
+    }
+
+    const mergedTable = usedElementIds.has(table.elementId)
+      ? {
+          ...table,
+          elementId: uniqueElementId(`${table.elementId}-ocr`, usedElementIds),
+        }
+      : table;
+
+    merged.push(mergedTable);
+    usedElementIds.add(mergedTable.elementId);
+    signatures.add(signature);
+  }
+
+  return merged;
+}
+
+function remapOcrTableElementId(
+  table: NormalizedParserTable,
+  ocrElementIdRemaps: Map<string, string>
+): NormalizedParserTable {
+  const elementId = ocrElementIdRemaps.get(elementIdentityKey(table.pageNumber, table.elementId));
+
+  return elementId && elementId !== table.elementId ? { ...table, elementId } : table;
+}
+
+function uniqueElementId(elementId: string, usedElementIds: Set<string>): string {
+  if (!usedElementIds.has(elementId)) {
+    return elementId;
+  }
+
+  let index = 2;
+  let candidate = `${elementId}-${index}`;
+  while (usedElementIds.has(candidate)) {
+    index += 1;
+    candidate = `${elementId}-${index}`;
+  }
+
+  return candidate;
+}
+
+function elementSignature(element: NormalizedParserElement): string {
+  return [
+    element.kind,
+    element.pageNumber,
+    element.text.trim(),
+    element.level ?? '',
+    element.bbox ? boundingBoxKey(element.bbox) : '',
+  ].join('\u0000');
+}
+
+function tableSignature(table: NormalizedParserTable): string {
+  return [
+    table.pageNumber,
+    table.caption.trim(),
+    table.columns.join('\u0000'),
+    table.rows.map((row) => row.join('\u0000')).join('\u0001'),
+    table.notes.join('\u0000'),
+  ].join('\u0002');
+}
+
+function boundingBoxKey(box: NormalizedParserElement['bbox']): string {
+  if (!box) {
+    return '';
+  }
+
+  return `${box.x}:${box.y}:${box.width}:${box.height}`;
+}
+
+function elementIdentityKey(pageNumber: number, elementId: string): string {
+  return `${pageNumber}\u0000${elementId}`;
+}
+
+function normalizeTextForDedupe(text: string): string {
+  return text.trim().replace(/\s+/g, ' ');
 }
 
 function comparePageElementOrder(

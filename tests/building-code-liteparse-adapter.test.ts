@@ -121,7 +121,7 @@ describe('building-code LiteParse adapter', () => {
     expect(targetPagesFromPageNumbers([5, 1, 2, 4, 9])).toBe('1-2,4-5,9');
   });
 
-  it('merges OCR output only for selected suspicious pages', () => {
+  it('preserves native page content and appends OCR content for selected suspicious pages', () => {
     const nativeDocument = normalizeLiteParseResult({
       parserVersion: '2.1.2',
       pages: [
@@ -147,10 +147,18 @@ describe('building-code LiteParse adapter', () => {
 
     expect(merged.pages.map((page) => page.extractionMode)).toEqual(['native', 'native_plus_ocr']);
     expect(merged.pages[0].text).toBe('Section 1 Scope has enough native text for acceptance.');
-    expect(merged.pages[1].text).toBe('Article 2.1.1.1 OCR recovered requirement text.');
-    expect(merged.elements.map((element) => element.pageNumber)).toEqual([1, 2]);
+    expect(merged.pages[1].text).toBe('Scan\nArticle 2.1.1.1 OCR recovered requirement text.');
+    expect(merged.pages[1].boundingBoxes).toEqual([
+      { x: 10, y: 20, width: 40, height: 12 },
+      { x: 12, y: 24, width: 300, height: 14 },
+    ]);
+    expect(merged.elements.map((element) => element.pageNumber)).toEqual([1, 2, 2]);
     expect(merged.elements[1]).toMatchObject({
       elementId: 'liteparse-page-2-item-1',
+      text: 'Scan',
+      pageNumber: 2,
+    });
+    expect(merged.elements[2]).toMatchObject({
       text: 'Article 2.1.1.1 OCR recovered requirement text.',
       pageNumber: 2,
     });
@@ -199,6 +207,7 @@ describe('building-code LiteParse adapter', () => {
       text: 'Scan',
       extractionMode: 'native',
     });
+    expect(document.diagnostics).toContain('OCR batch failed: missing tessdata');
     expect(document.diagnostics).toContain('OCR failed for page 2: missing tessdata');
     expect(document.diagnostics).toContain('Parsed 3 pages. OCR used on 0 pages.');
     expect(document.pageDiagnostics.find((item) => item.pageNumber === 2)).toMatchObject({
@@ -250,10 +259,58 @@ describe('building-code LiteParse adapter', () => {
     ]);
     expect(document.pages[1]).toMatchObject({
       pageNumber: 2,
-      text: 'Article 2.1.1.1 OCR recovered the scanned requirement.',
+      text: 'Scan\nArticle 2.1.1.1 OCR recovered the scanned requirement.',
       extractionMode: 'native_plus_ocr',
     });
     expect(document.diagnostics).toContain('Parsed 2 pages. OCR used on 1 pages.');
+  });
+
+  it('diagnoses selected suspicious pages omitted from successful batch OCR results', async () => {
+    const executor: LiteParseExecutor = async ({ options }) => {
+      if (!options.ocrEnabled) {
+        return {
+          parserVersion: '2.1.2',
+          pages: [
+            litePage(
+              1,
+              'Section 1.1 Scope provisions apply to this document and contain enough native code words for acceptance.',
+              [textItem('Section 1.1 Scope provisions apply to this document', 10, 20, 320, 14)]
+            ),
+            litePage(2, 'Scan', [textItem('Scan', 10, 20, 35, 12)]),
+            litePage(3, 'Blur', [textItem('Blur', 10, 20, 35, 12)]),
+          ],
+        };
+      }
+
+      return {
+        parserVersion: '2.1.2',
+        pages: [
+          litePage(2, 'Article 2.1.1.1 OCR recovered the scanned requirement.', [
+            textItem('Article 2.1.1.1 OCR recovered the scanned requirement.', 10, 20, 340, 14),
+          ]),
+        ],
+      };
+    };
+
+    const document = await parseDocumentWithLiteParse({
+      filePath: 'C:\\codes\\nbc.pdf',
+      executor,
+      logicalCoreCount: 16,
+    });
+
+    expect(document.pages[1]).toMatchObject({
+      pageNumber: 2,
+      text: 'Scan\nArticle 2.1.1.1 OCR recovered the scanned requirement.',
+      extractionMode: 'native_plus_ocr',
+    });
+    expect(document.pages[2]).toMatchObject({
+      pageNumber: 3,
+      text: 'Blur',
+      extractionMode: 'native',
+    });
+    expect(document.diagnostics).toContain(
+      'OCR produced no result for suspicious page 3; native extraction preserved.'
+    );
   });
 
   it('caps LiteParse OCR workers conservatively', () => {
