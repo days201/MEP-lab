@@ -197,6 +197,10 @@ MEP Lab ships with built-in skills under `.claude/skills/`, and supports user-ad
 - `xlsx` for Excel spreadsheet support
 - `skill-creator` for creating custom skills
 
+### Building-code parsing
+
+MEP Lab parses building-code PDFs locally by default with LiteParse. The parser first extracts native PDF text, then automatically OCRs only pages whose native text looks incomplete or corrupt. OCR is internal to the parser pipeline; there is no user-facing OCR mode setting. If OCR language data is unavailable, MEP Lab preserves native extraction, records a diagnostic warning, and keeps indexing available for the extracted text.
+
 ---
 
 ## 🏗️ Architecture

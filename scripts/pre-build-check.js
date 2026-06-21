@@ -71,6 +71,12 @@ function buildCheckList(platform, arch) {
       type: 'dir',
       severity: 'fatal',
     },
+    {
+      label: 'LiteParse package',
+      relPath: 'node_modules/@llamaindex/liteparse/package.json',
+      type: 'file',
+      severity: 'fatal',
+    },
   ];
 
   if (platform === 'darwin') {
