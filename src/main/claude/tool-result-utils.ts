@@ -177,16 +177,12 @@ function isNormalizedBuildingCodeResultText(value: string): boolean {
 }
 
 function buildingCodeToolErrorMessage(value: unknown): string | null {
-  if (
-    isRecord(value) &&
-    value.error === true &&
-    typeof value.message === 'string' &&
-    value.message.trim()
-  ) {
-    return value.message.trim();
+  if (!isRecord(value) || value.error !== true || typeof value.message !== 'string') {
+    return null;
   }
 
-  return null;
+  const message = value.message.trim();
+  return message || null;
 }
 
 function normalizeBuildingCodeResultText(rawText: string): string {
@@ -261,18 +257,14 @@ export function normalizeToolExecutionResultForUi(
     const images = dedupeImages([...inlineImages, ...detailImages]);
     const content = finalizeText(textParts, images.length);
     return {
-      content: isBuildingCodeToolName(toolName)
-        ? normalizeBuildingCodeResultText(content)
-        : content,
+      content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
       images,
     };
   }
 
   const content = typeof result === 'string' ? result : safeStringifyToolResult(result);
   return {
-    content: isBuildingCodeToolName(toolName)
-      ? normalizeBuildingCodeResultText(content)
-      : content,
+    content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
     images: dedupeImages(detailImages),
   };
 }
