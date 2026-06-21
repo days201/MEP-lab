@@ -50,6 +50,17 @@ function mcpTextResult(value: unknown) {
   };
 }
 
+function customToolTextResult(text: string) {
+  return {
+    content: [
+      {
+        type: 'text',
+        text,
+      },
+    ],
+  };
+}
+
 describe('building-code runner result wrapper', () => {
   it('wraps cited Building_Code MCP results for model context', () => {
     const normalized = normalizeMcpToolResultForModel(
@@ -87,6 +98,38 @@ describe('building-code runner result wrapper', () => {
     expect(normalized.text).not.toContain('unusable');
   });
 
+  it('preserves model-normalized search evidence when the UI formats tool_execution_end', () => {
+    const modelResult = normalizeMcpToolResultForModel(
+      mcpTextResult({ results: [citedEvidence], diagnostics: {} }),
+      'mcp__Building_Code__search'
+    );
+
+    const uiResult = normalizeToolExecutionResultForUi(
+      customToolTextResult(modelResult.text),
+      'mcp__Building_Code__search'
+    );
+
+    expect(uiResult.content).toBe(modelResult.text);
+    expect(uiResult.content).toContain('<building_code_evidence>');
+    expect(uiResult.content).not.toContain('tool result was not valid JSON');
+  });
+
+  it('preserves model-normalized read_section evidence when the UI formats tool_execution_end', () => {
+    const modelResult = normalizeMcpToolResultForModel(
+      mcpTextResult({ results: [citedEvidence], diagnostics: {} }),
+      'mcp__Building_Code__read_section'
+    );
+
+    const uiResult = normalizeToolExecutionResultForUi(
+      customToolTextResult(modelResult.text),
+      'mcp__Building_Code__read_section'
+    );
+
+    expect(uiResult.content).toBe(modelResult.text);
+    expect(uiResult.content).toContain('<building_code_evidence>');
+    expect(uiResult.content).not.toContain('tool result was not valid JSON');
+  });
+
   it('makes uncited Building_Code MCP results unusable without leaking raw text', () => {
     const uncitedResult = mcpTextResult({
       results: [
@@ -110,6 +153,44 @@ describe('building-code runner result wrapper', () => {
     expect(normalized.text).not.toContain('uncited extracted text');
   });
 
+  it('preserves a zero-result response through the UI formatter', () => {
+    const modelResult = normalizeMcpToolResultForModel(
+      mcpTextResult({ results: [], diagnostics: {} }),
+      'mcp__Building_Code__search'
+    );
+
+    const uiResult = normalizeToolExecutionResultForUi(
+      customToolTextResult(modelResult.text),
+      'mcp__Building_Code__search'
+    );
+
+    expect(modelResult.text).toContain('no cited evidence was provided');
+    expect(uiResult.content).toBe(modelResult.text);
+    expect(uiResult.content).not.toContain('tool result was not valid JSON');
+  });
+
+  it('surfaces structured MCP server errors and preserves them through UI formatting', () => {
+    const modelResult = normalizeMcpToolResultForModel(
+      mcpTextResult({
+        error: true,
+        message:
+          'Building_Code semantic search is unavailable because embeddings are not available for the active index.',
+        tool: 'search',
+      }),
+      'mcp__Building_Code__search'
+    );
+
+    const uiResult = normalizeToolExecutionResultForUi(
+      customToolTextResult(modelResult.text),
+      'mcp__Building_Code__search'
+    );
+
+    expect(modelResult.text).toContain('semantic search is unavailable');
+    expect(modelResult.text).not.toContain('did not include canonical cited evidence results');
+    expect(uiResult.content).toBe(modelResult.text);
+    expect(uiResult.content).not.toContain('tool result was not valid JSON');
+  });
+
   it('makes unparsable Building_Code MCP text unusable without echoing the payload', () => {
     const normalized = normalizeMcpToolResultForModel(
       {
@@ -124,10 +205,11 @@ describe('building-code runner result wrapper', () => {
     );
 
     expect(normalized.text).toContain('unusable');
+    expect(normalized.text).toContain('tool result was not valid JSON');
     expect(normalized.text).not.toContain('uncited extracted text');
   });
 
-  it('applies the same Building_Code gate to UI tool results', () => {
+  it('applies the same Building_Code gate to raw UI tool results', () => {
     const normalized = normalizeToolExecutionResultForUi(
       mcpTextResult({ results: [citedEvidence], diagnostics: {} }),
       'mcp__Building_Code__read_section'
