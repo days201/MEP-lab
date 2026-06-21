@@ -1,10 +1,10 @@
 import { buildNodeChunks } from './chunking';
-import { adaptDoclingToBuildingCodeIndex } from './canonical-adapter';
+import { adaptParserDocumentToBuildingCodeIndex } from './canonical-adapter';
 import { resolveCrossReferences } from './cross-reference';
 import { buildHierarchyFromPageTexts, checksumText } from './hierarchy';
 import { pageTextsFromMarkdownFixture, type PageText } from './pdf-extract';
 import { extractMarkdownTables } from './table';
-import type { NormalizedDoclingResult } from './docling-parser';
+import type { NormalizedParserDocument } from './parser-adapter';
 import type { KnowledgeBaseDocumentRecord } from '../../../shared/ipc-types';
 import type {
   CodeChunkRecord,
@@ -58,8 +58,8 @@ export function ingestMarkdownFixture(
 }
 
 export function ingestParsedBuildingCodeDocument(
-  parsed: NormalizedDoclingResult,
+  parsed: NormalizedParserDocument,
   document: KnowledgeBaseDocumentRecord
 ): BuildingCodeIngestionIndex {
-  return adaptDoclingToBuildingCodeIndex(parsed, document);
+  return adaptParserDocumentToBuildingCodeIndex(parsed, document);
 }

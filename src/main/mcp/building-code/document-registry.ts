@@ -55,6 +55,7 @@ export class DocumentRegistry {
         status: 'removed',
         lastIndexRebuildAt: nowIso,
         failureMessage: null,
+        progress: null,
       };
 
       await this.write(registry.documents);
@@ -84,7 +85,7 @@ export class DocumentRegistry {
 
       return {
         version: supportedVersion,
-        documents: registry.documents,
+        documents: registry.documents.map(normalizeDocumentRecord),
       };
     } catch (error) {
       if (isNodeError(error) && error.code === 'ENOENT') {
@@ -112,6 +113,15 @@ export class DocumentRegistry {
       }
     }
   }
+}
+
+function normalizeDocumentRecord(record: KnowledgeBaseDocumentRecord): KnowledgeBaseDocumentRecord {
+  const parserName = String(record.parserName);
+  return {
+    ...record,
+    parserName: parserName === 'docling' ? 'legacy' : record.parserName,
+    progress: record.progress ?? null,
+  };
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

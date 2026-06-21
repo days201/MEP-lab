@@ -79,7 +79,7 @@ export function detectBuildingCodeHeading(text: string): DetectedBuildingCodeHea
     const refNumber = stripTrailingDot(match[2]);
     const logicalRef = `${candidate.prefix} ${refNumber}`;
     const title = match[3]?.trim() || logicalRef;
-    if (isBodyProseTitle(title)) {
+    if (isBodyProseTitle(title) || isTableCaptionNoise(title)) {
       return null;
     }
     return {
@@ -94,7 +94,7 @@ export function detectBuildingCodeHeading(text: string): DetectedBuildingCodeHea
   if (bareNumeric) {
     const logicalRef = `Section ${stripTrailingDot(bareNumeric[1])}`;
     const title = bareNumeric[2]?.trim() || logicalRef;
-    if (isBodyProseTitle(title)) {
+    if (isBodyProseTitle(title) || isTableCaptionNoise(title)) {
       return null;
     }
     return {
@@ -127,4 +127,21 @@ function isBodyProseTitle(title: string): boolean {
   ];
 
   return bodyProsePhrases.some((pattern) => pattern.test(trimmed));
+}
+
+function isTableCaptionNoise(title: string): boolean {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const startsLikeProse = /^(?:lists?|shows?|describes?|indicates?|contains?|includes?|provides?|requires?|applies?|continues?|follows?)\b/i.test(
+    trimmed
+  );
+  const sentenceLike =
+    /[.!?]$/.test(trimmed) ||
+    /[.!?]/.test(trimmed) ||
+    /\b(?:and|or|but|because|when|where|while|which|that|if|unless|until)\b/i.test(trimmed);
+
+  return /\|/.test(trimmed) || (startsLikeProse && sentenceLike);
 }

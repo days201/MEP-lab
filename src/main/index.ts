@@ -28,6 +28,8 @@ import {
   KnowledgeBaseService,
   type KnowledgeBaseServiceOptions,
 } from './mcp/building-code/knowledge-base-service';
+import { createOpenAIEmbeddingClient } from './mcp/building-code/embedding';
+import { resolveEmbeddingRuntimeConfig } from './config/embedding-runtime-config';
 import { AgentRuntimeExtensionManager } from './extensions/agent-runtime-extension-manager';
 import {
   configStore,
@@ -177,24 +179,6 @@ async function waitForDevServer(url: string, maxAttempts = 30, intervalMs = 500)
 
   logWarn(`[App] Dev server did not become ready within timeout: ${url}`);
   return false;
-}
-
-function resolveDoclingPythonPath(): string {
-  const configured = process.env.DOCLING_PYTHON_PATH?.trim();
-  if (configured) {
-    return configured;
-  }
-  const platform = process.platform;
-  const executable = platform === 'win32' ? 'python.exe' : 'python3';
-  const candidate = app.isPackaged
-    ? join(process.resourcesPath, 'python', platform === 'win32' ? executable : join('bin', executable))
-    : join(
-        __dirname,
-        '../../resources/python',
-        `${platform}-${process.arch}`,
-        platform === 'win32' ? executable : join('bin', executable)
-      );
-  return fs.existsSync(candidate) ? candidate : platform === 'win32' ? 'python' : 'python3';
 }
 
 // Single-instance lock: skip in dev mode so vite-plugin-electron can restart freely
@@ -861,7 +845,22 @@ app
     memoryService = new MemoryService(db);
     const knowledgeBaseOptions: KnowledgeBaseServiceOptions = {
       userDataPath: app.getPath('userData'),
-      pythonPath: resolveDoclingPythonPath(),
+      embeddingClientFactory: () => {
+        const resolved = resolveEmbeddingRuntimeConfig(configStore.getAll());
+        if (!resolved) {
+          throw new Error(
+            'Embedding provider is not configured. Set up embeddings in API Settings first.'
+          );
+        }
+        return createOpenAIEmbeddingClient({
+          provider: resolved.provider,
+          apiKey: resolved.apiKey,
+          baseUrl: resolved.baseUrl,
+          model: resolved.model,
+          dimensions: resolved.dimensions,
+          timeoutMs: resolved.timeoutMs,
+        });
+      },
     };
     knowledgeBaseService = new KnowledgeBaseService(knowledgeBaseOptions);
     const extensionManager = new AgentRuntimeExtensionManager([new MemoryExtension(memoryService)]);
@@ -1515,10 +1514,12 @@ ipcMain.handle('config.save', async (_event, newConfig: Partial<AppConfig>) => {
       ? {
           ...newConfig.memoryRuntime,
           llm: newConfig.memoryRuntime.llm
-            ? {
-                ...newConfig.memoryRuntime.llm,
-                apiKey: newConfig.memoryRuntime.llm.apiKey ? '***' : '',
-              }
+            ? 'inheritFromActive' in newConfig.memoryRuntime.llm
+              ? {
+                  ...newConfig.memoryRuntime.llm,
+                  apiKey: newConfig.memoryRuntime.llm.apiKey ? '***' : '',
+                }
+              : newConfig.memoryRuntime.llm
             : undefined,
           embedding: newConfig.memoryRuntime.embedding
             ? {
@@ -2580,6 +2581,11 @@ ipcMain.handle('knowledgeBase.reparseDocument', async (_event, documentId: unkno
   return knowledgeBaseService.reparseDocument(validDocumentId);
 });
 
+ipcMain.handle('knowledgeBase.rebuildEmbeddings', async () => {
+  if (!knowledgeBaseService) throw new Error('Knowledge Base service not initialized');
+  return knowledgeBaseService.rebuildEmbeddings();
+});
+
 ipcMain.handle('knowledgeBase.removeDocument', async (_event, documentId: unknown) => {
   if (!knowledgeBaseService) throw new Error('Knowledge Base service not initialized');
   const validDocumentId = assertKnowledgeBaseDocumentId(documentId);
@@ -2793,7 +2799,8 @@ async function handleClientEvent(event: ClientEvent): Promise<unknown> {
         event.payload.cwd,
         event.payload.allowedTools,
         event.payload.content,
-        event.payload.memoryEnabled
+        event.payload.memoryEnabled,
+        event.payload.model
       );
 
     case 'session.continue':

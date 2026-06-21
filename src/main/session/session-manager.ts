@@ -251,11 +251,12 @@ export class SessionManager {
     cwd?: string,
     allowedTools?: string[],
     content?: ContentBlock[],
-    memoryEnabled?: boolean
+    memoryEnabled?: boolean,
+    model?: string
   ): Promise<Session> {
     log('[SessionManager] Starting new session:', title);
 
-    const session = this.createSession(title, cwd, allowedTools, memoryEnabled);
+    const session = this.createSession(title, cwd, allowedTools, memoryEnabled, model);
 
     // Save to database
     this.saveSession(session);
@@ -278,7 +279,8 @@ export class SessionManager {
     title: string,
     cwd?: string,
     allowedTools?: string[],
-    memoryEnabled?: boolean
+    memoryEnabled?: boolean,
+    model?: string
   ): Session {
     const now = Date.now();
     // Prefer frontend-provided cwd; fallback to env vars if provided
@@ -308,7 +310,7 @@ export class SessionManager {
         'grep',
       ],
       memoryEnabled: resolvedMemoryEnabled,
-      model: configStore.get('model') || undefined,
+      model: model?.trim() || configStore.get('model') || undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -686,9 +688,12 @@ export class SessionManager {
         );
         const messagesForContext = [...existingMessages, userMessage];
 
-        // Update session model to match current config (may have changed since session creation)
+        // Update session model only when idle (new run), not during active steering.
+        // session.status never reaches 'completed' — pinning relies on session creation
+        // snapshot plus this idle-gated sync, not per-turn run objects.
+        const isSessionIdle = !this.activeSessions.has(session.id);
         const currentModel = configStore.get('model');
-        if (currentModel && currentModel !== session.model) {
+        if (isSessionIdle && currentModel && currentModel !== session.model) {
           session.model = currentModel;
           this.db.sessions.update(session.id, { model: currentModel });
           this.sendToRenderer({

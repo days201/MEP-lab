@@ -14,7 +14,12 @@ import type {
 import { applySessionUpdate } from '../utils/session-update';
 
 export type GlobalNoticeType = 'info' | 'warning' | 'error' | 'success';
-export type GlobalNoticeAction = 'open_api_settings';
+export type GlobalNoticeAction =
+  | 'open_api_settings'
+  | 'open_api_settings_embeddings'
+  | 'open_api_settings_agent';
+
+export type SettingsApiSection = 'agent' | 'embeddings' | 'memory-model';
 
 export interface GlobalNotice {
   id: string;
@@ -86,6 +91,7 @@ interface AppState {
   contextPanelCollapsed: boolean;
   showSettings: boolean;
   settingsTab: string | null;
+  settingsSection: SettingsApiSection | null;
 
   // Permission
   pendingPermission: PermissionRequest | null;
@@ -154,6 +160,7 @@ interface AppState {
   setContextPanelCollapsed: (collapsed: boolean) => void;
   setShowSettings: (show: boolean) => void;
   setSettingsTab: (tab: string | null) => void;
+  setSettingsSection: (section: SettingsApiSection | null) => void;
 
   setPendingPermission: (permission: PermissionRequest | null) => void;
 
@@ -227,6 +234,7 @@ export const useAppStore = create<AppState>((set) => ({
   contextPanelCollapsed: false,
   showSettings: false,
   settingsTab: null,
+  settingsSection: null,
   pendingPermission: null,
   pendingSudoPassword: null,
   settings: defaultSettings,
@@ -542,6 +550,7 @@ export const useAppStore = create<AppState>((set) => ({
   setContextPanelCollapsed: (collapsed) => set({ contextPanelCollapsed: collapsed }),
   setShowSettings: (show) => set({ showSettings: show }),
   setSettingsTab: (tab) => set({ settingsTab: tab }),
+  setSettingsSection: (section) => set({ settingsSection: section }),
 
   // Permission actions
   setPendingPermission: (permission) => set({ pendingPermission: permission }),

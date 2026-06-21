@@ -9,9 +9,10 @@ import {
 import { runPiAiOneShot } from '../claude/claude-sdk-one-shot';
 import { logWarn } from '../utils/logger';
 import {
-  resolveMemoryModelRuntimeConfig,
+  resolveMemoryLlmRuntimeConfig,
   type ResolvedMemoryModelConfig,
 } from './memory-runtime-config';
+import { resolveEmbeddingRuntimeConfig } from '../config/embedding-runtime-config';
 
 export interface MemoryCompletionRequest {
   systemPrompt: string;
@@ -45,11 +46,10 @@ export class MemoryLLMClient implements MemoryLLMClientLike {
 
   async complete(request: MemoryCompletionRequest): Promise<MemoryCompletionResponse> {
     const appConfig = this.getConfig();
-    const llmConfig = resolveMemoryModelRuntimeConfig(
-      appConfig,
-      appConfig.memoryRuntime?.llm,
-      appConfig.model
-    );
+    const llmConfig = resolveMemoryLlmRuntimeConfig(appConfig);
+    if (!llmConfig) {
+      throw new Error('Memory LLM is disabled');
+    }
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -92,11 +92,11 @@ export class MemoryLLMClient implements MemoryLLMClientLike {
     if (!appConfig.memoryRuntime?.useEmbedding) {
       return [];
     }
-    const embedConfig = resolveMemoryModelRuntimeConfig(
-      appConfig,
-      appConfig.memoryRuntime.embedding,
-      'text-embedding-3-small'
-    );
+    const embedConfig = resolveEmbeddingRuntimeConfig(appConfig);
+    if (!embedConfig) {
+      logWarn('[MemoryLLMClient] No usable embedding config; returning empty embedding');
+      return [];
+    }
 
     const provider = embedConfig.provider;
     const protocol = embedConfig.customProtocol;
@@ -137,6 +137,7 @@ export class MemoryLLMClient implements MemoryLLMClientLike {
     const response = await client.embeddings.create({
       model: embedConfig.model,
       input: trimmed,
+      ...(embedConfig.dimensions ? { dimensions: embedConfig.dimensions } : {}),
     });
     return response.data[0]?.embedding || [];
   }

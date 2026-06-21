@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Key,
@@ -9,11 +10,17 @@ import {
   AlertCircle,
   CheckCircle,
   RefreshCw,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { useApiConfigState } from '../../hooks/useApiConfigState';
+import { useAppStore } from '../../store';
+import type { SettingsApiSection } from '../../store';
 import { ApiConfigSetManager } from '../ApiConfigSetManager';
 import { CommonProviderSetupsCard, GuidanceInlineHint } from '../ProviderGuidance';
 import ApiDiagnosticsPanel from '../ApiDiagnosticsPanel';
+import { SettingsEmbeddings } from './SettingsEmbeddings';
+import { SettingsMemoryModel } from './SettingsMemoryModel';
 
 interface ModelOptionItem {
   id: string;
@@ -22,8 +29,27 @@ interface ModelOptionItem {
 
 // ==================== API Settings Tab ====================
 
-export function SettingsAPI() {
+export function SettingsAPI({ initialSection }: { initialSection?: SettingsApiSection }) {
   const { t } = useTranslation();
+  const settingsSection = useAppStore((s) => s.settingsSection);
+  const setSettingsSection = useAppStore((s) => s.setSettingsSection);
+  const [activeSection, setActiveSection] = useState<SettingsApiSection>(
+    initialSection || settingsSection || 'agent'
+  );
+  const [newModelId, setNewModelId] = useState('');
+
+  useEffect(() => {
+    if (settingsSection) {
+      setActiveSection(settingsSection);
+      setSettingsSection(null);
+    }
+  }, [settingsSection, setSettingsSection]);
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
   const {
     provider,
     customProtocol,
@@ -32,8 +58,8 @@ export function SettingsAPI() {
     model,
     customModel,
     useCustomModel,
-    contextWindow,
-    maxTokens,
+    agentModels,
+    enableThinking,
     modelInputPlaceholder,
     modelInputHint,
     presets,
@@ -45,7 +71,6 @@ export function SettingsAPI() {
     successMessage,
     isRefreshingModels,
     isDiscoveringLocalOllama,
-    enableThinking,
     isOllamaMode,
     requiresApiKey,
     protocolGuidanceText,
@@ -64,8 +89,9 @@ export function SettingsAPI() {
     setBaseUrl,
     setModel,
     setCustomModel,
-    setContextWindow,
-    setMaxTokens,
+    addModel,
+    removeModel,
+    setSelectedModel,
     toggleCustomModel,
     setEnableThinking,
     applyCommonProviderSetup,
@@ -99,6 +125,34 @@ export function SettingsAPI() {
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap gap-2 border-b border-border-muted pb-4">
+        {(
+          [
+            ['agent', t('api.sectionAgent')],
+            ['embeddings', t('api.sectionEmbeddings')],
+            ['memory-model', t('api.sectionMemoryModel')],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveSection(id)}
+            className={`rounded-full px-3 py-1.5 text-sm transition-colors border ${
+              activeSection === id
+                ? 'border-accent bg-accent/10 text-accent font-medium'
+                : 'border-border-muted text-text-secondary hover:border-border'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === 'embeddings' && <SettingsEmbeddings />}
+      {activeSection === 'memory-model' && <SettingsMemoryModel />}
+
+      {activeSection === 'agent' && (
+        <>
       {/* Config Set Switcher */}
       <ApiConfigSetManager
         configSets={configSets}
@@ -140,7 +194,7 @@ export function SettingsAPI() {
                     : 'border-border-muted text-text-secondary hover:border-border hover:text-text-primary disabled:opacity-50'
                 }`}
               >
-                {p === 'custom' ? t('api.moreModels') : presets?.[p]?.name || p}
+                {p === 'custom' ? t('api.custom') : presets?.[p]?.name || p}
               </button>
             )
           )}
@@ -341,48 +395,54 @@ export function SettingsAPI() {
         )}
         {useCustomModel && <p className="text-xs text-text-muted">{modelInputHint}</p>}
 
-        {/* Context Window & Max Tokens — only for non-registry providers */}
-        {(provider === 'ollama' || provider === 'custom') && (
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div>
-              <label
-                htmlFor="api-context-window-input"
-                className="block text-xs font-medium text-text-secondary mb-1"
+        <div className="space-y-2 pt-3 border-t border-border-muted">
+          <label className="text-xs font-medium text-text-secondary">{t('api.agentModels')}</label>
+          <div className="flex flex-wrap gap-2">
+            {agentModels.map((entry) => (
+              <div
+                key={entry.id}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                  model === entry.id
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-border-muted text-text-secondary'
+                }`}
               >
-                {t('api.contextWindow')}
-              </label>
-              <input
-                id="api-context-window-input"
-                type="number"
-                value={contextWindow}
-                onChange={(e) => setContextWindow(e.target.value)}
-                placeholder={t('api.contextWindowPlaceholder')}
-                min={1024}
-                step={1024}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary text-sm placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="api-max-tokens-input"
-                className="block text-xs font-medium text-text-secondary mb-1"
-              >
-                {t('api.maxOutputTokens')}
-              </label>
-              <input
-                id="api-max-tokens-input"
-                type="number"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(e.target.value)}
-                placeholder={t('api.maxOutputTokensPlaceholder')}
-                min={256}
-                step={256}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-text-primary text-sm placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all"
-              />
-            </div>
-            <p className="col-span-2 text-xs text-text-muted">{t('api.contextWindowHint')}</p>
+                <button type="button" onClick={() => setSelectedModel(entry.id)}>
+                  {entry.label || entry.id}
+                </button>
+                {agentModels.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeModel(entry.id)}
+                    className="text-text-muted hover:text-error"
+                    aria-label={t('common.remove')}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-        )}
+          <div className="flex gap-2">
+            <input
+              value={newModelId}
+              onChange={(e) => setNewModelId(e.target.value)}
+              placeholder={t('api.addModelPlaceholder')}
+              className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                addModel(newModelId);
+                setNewModelId('');
+              }}
+              className="inline-flex items-center gap-1 rounded-lg border border-border-muted px-3 py-2 text-sm hover:bg-surface-hover"
+            >
+              <Plus className="h-4 w-4" />
+              {t('common.add')}
+            </button>
+          </div>
+        </div>
       </div>
 
       {provider === 'custom' && (
@@ -460,6 +520,8 @@ export function SettingsAPI() {
           </button>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -224,7 +224,7 @@ function parserProvenanceForPage(
   const isFixture = source.sourceUrl.startsWith('fixture://');
 
   return {
-    name: isFixture ? 'fixture' : 'docling',
+    name: isFixture ? 'fixture' : 'legacy',
     version: isFixture ? 'test-fixture' : 'unknown',
     sourceElementIds: [],
     pageRange: String(page.pageNumber),

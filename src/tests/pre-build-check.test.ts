@@ -25,6 +25,14 @@ function makeDir(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+function makeLiteParsePackage(
+  root: string,
+  nativePackageName = '@llamaindex/liteparse-darwin-arm64'
+): void {
+  makeFile(path.join(root, 'node_modules/@llamaindex/liteparse/package.json'));
+  makeFile(path.join(root, `node_modules/${nativePackageName}/package.json`));
+}
+
 /**
  * Creates all artifacts that are required for a successful darwin/arm64 check.
  */
@@ -36,6 +44,7 @@ function populateDarwinArtifacts(root: string, arch: string = 'arm64'): void {
   makeDir(path.join(root, 'dist'));
   makeDir(path.join(root, '.claude/skills'));
   makeDir(path.join(root, '.claude/plugins'));
+  makeLiteParsePackage(root, `@llamaindex/liteparse-darwin-${arch}`);
 
   // macOS FATAL resources
   makeFile(path.join(root, `resources/node/darwin-${arch}/bin/node`));
@@ -52,6 +61,7 @@ function populateWin32Artifacts(root: string): void {
   makeDir(path.join(root, 'dist'));
   makeDir(path.join(root, '.claude/skills'));
   makeDir(path.join(root, '.claude/plugins'));
+  makeLiteParsePackage(root, '@llamaindex/liteparse-win32-x64-msvc');
   makeFile(path.join(root, 'resources/node/win32-x64/node.exe'));
   makeFile(path.join(root, 'dist-wsl-agent/index.js'));
 }
@@ -82,8 +92,8 @@ describe('pre-build-check: runChecks', () => {
 
     expect(result.failed).toBe(0);
     expect(result.hasFatal).toBe(false);
-    // 6 common + 2 darwin FATAL = 8 FATAL checks should pass
-    expect(result.passed).toBeGreaterThanOrEqual(8);
+    // 7 common + 2 darwin FATAL = 9 FATAL checks should pass
+    expect(result.passed).toBeGreaterThanOrEqual(9);
   });
 
   it('passes all FATAL checks on win32 when required artifacts exist', () => {
@@ -93,7 +103,7 @@ describe('pre-build-check: runChecks', () => {
 
     expect(result.failed).toBe(0);
     expect(result.hasFatal).toBe(false);
-    expect(result.passed).toBeGreaterThanOrEqual(8);
+    expect(result.passed).toBeGreaterThanOrEqual(9);
   });
 
   it('reports warnings for optional darwin resources that are missing', () => {
@@ -155,6 +165,41 @@ describe('pre-build-check: runChecks', () => {
       (r: { relPath: string }) => r.relPath === '.claude/plugins'
     );
     expect(pluginsCheck).toMatchObject({
+      passed: false,
+      severity: 'fatal',
+    });
+    expect(result.failed).toBeGreaterThan(0);
+    expect(result.hasFatal).toBe(true);
+  });
+
+  it('reports hasFatal when LiteParse package metadata is missing', () => {
+    populateDarwinArtifacts(tmpDir, 'arm64');
+    fs.rmSync(path.join(tmpDir, 'node_modules/@llamaindex/liteparse/package.json'));
+
+    const result = runChecks(tmpDir, 'darwin', 'arm64');
+
+    const liteParseCheck = result.results.find(
+      (r: { relPath: string }) => r.relPath === 'node_modules/@llamaindex/liteparse/package.json'
+    );
+    expect(liteParseCheck).toMatchObject({
+      passed: false,
+      severity: 'fatal',
+    });
+    expect(result.failed).toBeGreaterThan(0);
+    expect(result.hasFatal).toBe(true);
+  });
+
+  it('reports hasFatal when platform-native LiteParse package metadata is missing', () => {
+    populateWin32Artifacts(tmpDir);
+    fs.rmSync(path.join(tmpDir, 'node_modules/@llamaindex/liteparse-win32-x64-msvc/package.json'));
+
+    const result = runChecks(tmpDir, 'win32', 'x64');
+
+    const nativeLiteParseCheck = result.results.find(
+      (r: { relPath: string }) =>
+        r.relPath === 'node_modules/@llamaindex/liteparse-win32-x64-msvc/package.json'
+    );
+    expect(nativeLiteParseCheck).toMatchObject({
       passed: false,
       severity: 'fatal',
     });

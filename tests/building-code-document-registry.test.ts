@@ -16,7 +16,7 @@ function record(overrides: Partial<KnowledgeBaseDocumentRecord> = {}): Knowledge
     sourceChecksum: 'sha256:abc',
     sourcePath: '/tmp/NBC.pdf',
     sourceUri: 'kb://building-code/doc-1/NBC.pdf',
-    parserName: 'docling',
+    parserName: 'liteparse',
     parserVersion: '2.0.0',
     status: 'queued',
     uploadedAt: '2026-06-19T12:00:00.000Z',
@@ -31,6 +31,7 @@ function record(overrides: Partial<KnowledgeBaseDocumentRecord> = {}): Knowledge
     },
     diagnostics: [],
     failureMessage: null,
+    progress: null,
     indexSummary: {
       nodeCount: 0,
       tableCount: 0,
@@ -121,18 +122,57 @@ describe('building-code document registry', () => {
     await expect(registry.list()).rejects.toThrow('Malformed knowledge-base document registry documents');
   });
 
+  it('migrates legacy Docling document parser metadata on read', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
+    roots.push(root);
+    const registryPath = path.join(root, 'documents.json');
+    fs.writeFileSync(
+      registryPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          documents: [record({ parserName: 'docling' as never, parserVersion: '2.0.0-docling' })],
+        },
+        null,
+        2
+      )}\n`,
+      'utf8'
+    );
+    const registry = new DocumentRegistry(registryPath);
+
+    await expect(registry.list()).resolves.toMatchObject([
+      {
+        documentId: 'doc-1',
+        parserName: 'legacy',
+        parserVersion: '2.0.0-docling',
+      },
+    ]);
+  });
+
   it('marks removed documents without deleting their audit record', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-registry-'));
     roots.push(root);
     const registry = new DocumentRegistry(path.join(root, 'documents.json'));
 
-    await registry.upsert(record());
+    await registry.upsert(
+      record({
+        progress: {
+          phase: 'embedding',
+          message: 'Embedding parsed document chunks',
+          currentPage: null,
+          totalPages: null,
+          ocrPageCount: 0,
+          updatedAt: '2026-06-19T12:01:00.000Z',
+        },
+      })
+    );
     await registry.markRemoved('doc-1', '2026-06-19T12:02:00.000Z');
 
     expect(await registry.get('doc-1')).toMatchObject({
       status: 'removed',
       lastIndexRebuildAt: '2026-06-19T12:02:00.000Z',
       failureMessage: null,
+      progress: null,
     });
   });
 });

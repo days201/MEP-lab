@@ -13,22 +13,13 @@ import type {
 import { useAppStore } from '../../store';
 import { SettingsContentSection } from './shared';
 
+import { hasUsableEmbeddingConfigClient } from '../../../shared/embedding-config-status';
+
 type SearchMode = 'workspace' | 'all' | 'global';
 
 const DEFAULT_MEMORY_RUNTIME: MemoryRuntimeConfig = {
   llm: {
-    inheritFromActive: true,
-    apiKey: '',
-    baseUrl: '',
-    model: '',
-    timeoutMs: 180000,
-  },
-  embedding: {
-    inheritFromActive: true,
-    apiKey: '',
-    baseUrl: '',
-    model: 'text-embedding-3-small',
-    timeoutMs: 180000,
+    mode: 'use-agent-model',
   },
   useEmbedding: false,
   maxNavSteps: 2,
@@ -43,9 +34,13 @@ const DEFAULT_MEMORY_RUNTIME: MemoryRuntimeConfig = {
 
 function cloneRuntimeConfig(runtime?: MemoryRuntimeConfig): MemoryRuntimeConfig {
   const source = runtime || DEFAULT_MEMORY_RUNTIME;
+  const llm =
+    source.llm && 'mode' in source.llm
+      ? source.llm
+      : DEFAULT_MEMORY_RUNTIME.llm;
   return {
-    llm: { ...DEFAULT_MEMORY_RUNTIME.llm, ...source.llm },
-    embedding: { ...DEFAULT_MEMORY_RUNTIME.embedding, ...source.embedding },
+    llm: { ...DEFAULT_MEMORY_RUNTIME.llm, ...llm },
+    embedding: source.embedding,
     useEmbedding: source.useEmbedding ?? DEFAULT_MEMORY_RUNTIME.useEmbedding,
     maxNavSteps: source.maxNavSteps ?? DEFAULT_MEMORY_RUNTIME.maxNavSteps,
     ingestionConcurrency:
@@ -88,6 +83,19 @@ export function SettingsMemory() {
   );
   const [isBusy, setIsBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  const setShowSettings = useAppStore((state) => state.setShowSettings);
+  const setSettingsTab = useAppStore((state) => state.setSettingsTab);
+  const setSettingsSection = useAppStore((state) => state.setSettingsSection);
+  const embeddingConfigured = hasUsableEmbeddingConfigClient(appConfig);
+  const memoryLlmLabel =
+    runtimeDraft.llm && 'mode' in runtimeDraft.llm
+      ? runtimeDraft.llm.mode === 'disabled'
+        ? t('api.memoryModelDisabled')
+        : runtimeDraft.llm.mode === 'use-specific-agent-model'
+          ? runtimeDraft.llm.selectedModelId || appConfig?.model || '—'
+          : appConfig?.model || t('api.memoryModelUseAgent')
+      : appConfig?.model || t('api.memoryModelUseAgent');
 
   const enabled = overview?.enabled ?? appConfig?.memoryEnabled ?? true;
 
@@ -467,16 +475,6 @@ export function SettingsMemory() {
               />
             </LabeledField>
             <ToggleField
-              label={t('memory.useEmbedding', 'Enable embedding retrieval')}
-              checked={runtimeDraft.useEmbedding}
-              onChange={(checked) =>
-                setRuntimeDraft((prev) => ({
-                  ...prev,
-                  useEmbedding: checked,
-                }))
-              }
-            />
-            <ToggleField
               label={t('memory.evalEnabled', 'Enable real model evaluation')}
               checked={runtimeDraft.evalEnabled ?? false}
               onChange={(checked) =>
@@ -486,6 +484,51 @@ export function SettingsMemory() {
                 }))
               }
             />
+          </div>
+          <div className="rounded-xl border border-border-muted bg-background/80 p-4 space-y-3">
+            <p className="text-sm font-medium text-text-primary">{t('memory.apiSummaryTitle')}</p>
+            <div className="grid gap-2 text-sm text-text-secondary">
+              <p>
+                {t('memory.retrievalStatus')}:{' '}
+                <span className="text-text-primary">
+                  {runtimeDraft.useEmbedding ? t('memory.retrievalOn') : t('memory.retrievalOff')}
+                </span>
+              </p>
+              <p>
+                {t('memory.modelStatus')}:{' '}
+                <span className="text-text-primary">{memoryLlmLabel}</span>
+              </p>
+              <p>
+                {t('memory.embeddingsStatus')}:{' '}
+                <span className="text-text-primary">
+                  {embeddingConfigured ? t('memory.embeddingsConfigured') : t('memory.embeddingsMissing')}
+                </span>
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsSection('embeddings');
+                  setSettingsTab('api');
+                  setShowSettings(true);
+                }}
+                className="text-sm text-accent hover:underline"
+              >
+                {t('api.configureEmbeddings')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsSection('memory-model');
+                  setSettingsTab('api');
+                  setShowSettings(true);
+                }}
+                className="text-sm text-accent hover:underline"
+              >
+                {t('api.sectionMemoryModel')}
+              </button>
+            </div>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <LabeledField label={t('memory.evalArtifactsRoot', 'Evaluation artifacts directory')}>
@@ -527,114 +570,6 @@ export function SettingsMemory() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
               />
             </LabeledField>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3 rounded-lg border border-border-muted bg-background/80 p-3">
-              <p className="text-sm font-medium text-text-primary">
-                {t('memory.llmConfig', 'Memory LLM')}
-              </p>
-              <ToggleField
-                label={t('memory.inheritActive', 'Inherit active API')}
-                checked={runtimeDraft.llm.inheritFromActive}
-                onChange={(checked) =>
-                  setRuntimeDraft((prev) => ({
-                    ...prev,
-                    llm: { ...prev.llm, inheritFromActive: checked },
-                  }))
-                }
-              />
-              <LabeledField label={t('memory.modelOverride', 'Model override')}>
-                <input
-                  value={runtimeDraft.llm.model || ''}
-                  onChange={(event) =>
-                    setRuntimeDraft((prev) => ({
-                      ...prev,
-                      llm: { ...prev.llm, model: event.target.value },
-                    }))
-                  }
-                  placeholder={appConfig?.model || ''}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
-                />
-              </LabeledField>
-              <LabeledField label={t('memory.baseUrlOverride', 'Base URL override')}>
-                <input
-                  value={runtimeDraft.llm.baseUrl || ''}
-                  onChange={(event) =>
-                    setRuntimeDraft((prev) => ({
-                      ...prev,
-                      llm: { ...prev.llm, baseUrl: event.target.value },
-                    }))
-                  }
-                  placeholder={appConfig?.baseUrl || ''}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
-                />
-              </LabeledField>
-              <LabeledField label={t('memory.apiKeyOverride', 'API key override')}>
-                <input
-                  type="password"
-                  value={runtimeDraft.llm.apiKey || ''}
-                  onChange={(event) =>
-                    setRuntimeDraft((prev) => ({
-                      ...prev,
-                      llm: { ...prev.llm, apiKey: event.target.value },
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
-                />
-              </LabeledField>
-            </div>
-            <div className="space-y-3 rounded-lg border border-border-muted bg-background/80 p-3">
-              <p className="text-sm font-medium text-text-primary">
-                {t('memory.embeddingConfig', 'Embedding')}
-              </p>
-              <ToggleField
-                label={t('memory.inheritActive', 'Inherit active API')}
-                checked={runtimeDraft.embedding.inheritFromActive}
-                onChange={(checked) =>
-                  setRuntimeDraft((prev) => ({
-                    ...prev,
-                    embedding: { ...prev.embedding, inheritFromActive: checked },
-                  }))
-                }
-              />
-              <LabeledField label={t('memory.modelOverride', 'Model override')}>
-                <input
-                  value={runtimeDraft.embedding.model || ''}
-                  onChange={(event) =>
-                    setRuntimeDraft((prev) => ({
-                      ...prev,
-                      embedding: { ...prev.embedding, model: event.target.value },
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
-                />
-              </LabeledField>
-              <LabeledField label={t('memory.baseUrlOverride', 'Base URL override')}>
-                <input
-                  value={runtimeDraft.embedding.baseUrl || ''}
-                  onChange={(event) =>
-                    setRuntimeDraft((prev) => ({
-                      ...prev,
-                      embedding: { ...prev.embedding, baseUrl: event.target.value },
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
-                />
-              </LabeledField>
-              <LabeledField label={t('memory.apiKeyOverride', 'API key override')}>
-                <input
-                  type="password"
-                  value={runtimeDraft.embedding.apiKey || ''}
-                  onChange={(event) =>
-                    setRuntimeDraft((prev) => ({
-                      ...prev,
-                      embedding: { ...prev.embedding, apiKey: event.target.value },
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent"
-                />
-              </LabeledField>
-            </div>
           </div>
           <div className="flex justify-end">
             <button

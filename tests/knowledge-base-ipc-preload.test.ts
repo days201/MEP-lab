@@ -6,6 +6,10 @@ describe('knowledge-base IPC and preload surface', () => {
   const mainIndex = readFileSync(path.resolve(process.cwd(), 'src/main/index.ts'), 'utf8');
   const preload = readFileSync(path.resolve(process.cwd(), 'src/preload/index.ts'), 'utf8');
   const ipcTypes = readFileSync(path.resolve(process.cwd(), 'src/shared/ipc-types.ts'), 'utf8');
+  const rendererTypes = readFileSync(
+    path.resolve(process.cwd(), 'src/renderer/types/index.ts'),
+    'utf8'
+  );
   const knowledgeBaseService = readFileSync(
     path.resolve(process.cwd(), 'src/main/mcp/building-code/knowledge-base-service.ts'),
     'utf8'
@@ -47,17 +51,16 @@ describe('knowledge-base IPC and preload surface', () => {
     expect(selectHandler).not.toContain('mainWindow!');
   });
 
-  it('wires pythonPath as a KnowledgeBaseService dependency', () => {
+  it('constructs the knowledge-base service with parser-neutral LiteParse defaults', () => {
     expect(mainIndex).toContain('const knowledgeBaseOptions: KnowledgeBaseServiceOptions = {');
-    expect(mainIndex).toContain('function resolveDoclingPythonPath(): string');
-    expect(mainIndex).toContain('process.env.DOCLING_PYTHON_PATH?.trim()');
-    expect(mainIndex).toContain('pythonPath: resolveDoclingPythonPath(),');
+    expect(mainIndex).toContain('userDataPath: app.getPath(\'userData\'),');
     expect(mainIndex).toContain('knowledgeBaseService = new KnowledgeBaseService(knowledgeBaseOptions);');
-    expect(mainIndex).not.toContain('DOCLING_PYTHON_PATH ||= knowledgeBasePythonPath');
-    expect(knowledgeBaseService).toContain('pythonPath?: string;');
-    expect(knowledgeBaseService).toContain('private readonly pythonPath: string;');
-    expect(knowledgeBaseService).toContain("this.pythonPath = options.pythonPath ?? 'python';");
-    expect(knowledgeBaseService).toContain('pythonPath: this.pythonPath,');
+    expect(mainIndex).not.toContain('pythonPath: resolveDoclingPythonPath(),');
+    expect(knowledgeBaseService).toContain('parseDocumentWithLiteParse(input)');
+    expect(knowledgeBaseService).toContain("parserName: 'liteparse'");
+    expect(knowledgeBaseService).not.toContain('parseDocumentWithDocling({');
+    expect(knowledgeBaseService).not.toContain('pythonPath?: string');
+    expect(knowledgeBaseService).not.toContain('void options.pythonPath');
   });
 
   it('validates runtime IPC payloads before calling the service', () => {
@@ -80,5 +83,13 @@ describe('knowledge-base IPC and preload surface', () => {
     expect(ipcTypes).toContain('export interface KnowledgeBaseOverview');
     expect(ipcTypes).toContain('export interface KnowledgeBaseDocumentRecord');
     expect(ipcTypes).toContain('export interface KnowledgeBaseGraphSummary');
+    expect(ipcTypes).toContain('export interface KnowledgeBaseParseProgress');
+    expect(ipcTypes).toContain("| 'ocr'");
+    expect(ipcTypes).toContain("| 'canonicalizing'");
+    expect(ipcTypes).toContain("| 'interrupted'");
+    expect(ipcTypes).toContain('parserName: KnowledgeBaseParserName;');
+    expect(ipcTypes).toContain('progress: KnowledgeBaseParseProgress | null;');
+    expect(rendererTypes).toContain('KnowledgeBaseParseProgress');
+    expect(rendererTypes).toContain('KnowledgeBaseParserName');
   });
 });

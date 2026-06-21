@@ -18,6 +18,14 @@ files:
   - node_modules/better-sqlite3/**/*
   - node_modules/@anthropic-ai/sdk/**/*
   - node_modules/@larksuiteoapi/**/*
+  - node_modules/@llamaindex/liteparse/**/*
+  - node_modules/@llamaindex/liteparse-darwin-arm64/**/*
+  - node_modules/@llamaindex/liteparse-darwin-x64/**/*
+  - node_modules/@llamaindex/liteparse-linux-arm64-gnu/**/*
+  - node_modules/@llamaindex/liteparse-linux-x64-gnu/**/*
+  - node_modules/@llamaindex/liteparse-linux-x64-musl/**/*
+  - node_modules/@llamaindex/liteparse-win32-arm64-msvc/**/*
+  - node_modules/@llamaindex/liteparse-win32-x64-msvc/**/*
   - node_modules/openai/**/*
   - node_modules/@modelcontextprotocol/**/*
   - node_modules/electron-updater/**/*
@@ -56,6 +64,24 @@ asarUnpack:
   - node_modules/@img/**/*.dll
   - node_modules/@img/**/*.dylib
   - node_modules/@img/**/*.so
+  - node_modules/@llamaindex/liteparse/**/*.node
+  - node_modules/@llamaindex/liteparse/**/*.dll
+  - node_modules/@llamaindex/liteparse/**/*.dylib
+  - node_modules/@llamaindex/liteparse/**/*.so
+  - node_modules/@llamaindex/liteparse-darwin-arm64/**/*.node
+  - node_modules/@llamaindex/liteparse-darwin-arm64/**/*.dylib
+  - node_modules/@llamaindex/liteparse-darwin-x64/**/*.node
+  - node_modules/@llamaindex/liteparse-darwin-x64/**/*.dylib
+  - node_modules/@llamaindex/liteparse-linux-arm64-gnu/**/*.node
+  - node_modules/@llamaindex/liteparse-linux-arm64-gnu/**/*.so
+  - node_modules/@llamaindex/liteparse-linux-x64-gnu/**/*.node
+  - node_modules/@llamaindex/liteparse-linux-x64-gnu/**/*.so
+  - node_modules/@llamaindex/liteparse-linux-x64-musl/**/*.node
+  - node_modules/@llamaindex/liteparse-linux-x64-musl/**/*.so
+  - node_modules/@llamaindex/liteparse-win32-arm64-msvc/**/*.node
+  - node_modules/@llamaindex/liteparse-win32-arm64-msvc/**/*.dll
+  - node_modules/@llamaindex/liteparse-win32-x64-msvc/**/*.node
+  - node_modules/@llamaindex/liteparse-win32-x64-msvc/**/*.dll
   - node_modules/better-sqlite3/**/*.node
   - node_modules/bufferutil/**/*.node
   - node_modules/utf-8-validate/**/*.node

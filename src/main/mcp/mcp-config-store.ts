@@ -7,10 +7,8 @@ import type { MCPServerConfig } from './mcp-manager';
 import { configStore, type AppConfig } from '../config/config-store';
 import {
   normalizeOpenAICompatibleBaseUrl,
-  resolveOllamaCredentials,
-  resolveOpenAICredentials,
 } from '../config/auth-utils';
-import { resolveMemoryModelRuntimeConfig } from '../memory/memory-runtime-config';
+import { resolveEmbeddingRuntimeConfig } from '../config/embedding-runtime-config';
 import { log, logError } from '../utils/logger';
 import { buildKnowledgeBaseStoragePaths } from './building-code/storage';
 
@@ -72,6 +70,7 @@ export const MCP_SERVER_PRESETS: Record<string, Omit<MCPServerConfig, 'id' | 'en
     env: {
       BUILDING_CODE_INDEX_DIR: '',
       BUILDING_CODE_EMBEDDING_MODEL: '',
+      BUILDING_CODE_EMBEDDING_DIMENSIONS: '',
       BUILDING_CODE_EMBEDDING_BASE_URL: '',
       BUILDING_CODE_EMBEDDING_API_KEY: '',
       BUILDING_CODE_EMBEDDING_TIMEOUT_MS: '',
@@ -79,11 +78,12 @@ export const MCP_SERVER_PRESETS: Record<string, Omit<MCPServerConfig, 'id' | 'en
     requiresEnv: [],
     envDescription: {
       BUILDING_CODE_INDEX_DIR: 'Directory containing imported building-code index files',
-      BUILDING_CODE_EMBEDDING_MODEL: 'Optional override; inherits Memory embedding model by default',
-      BUILDING_CODE_EMBEDDING_BASE_URL:
-        'Optional override; inherits Memory OpenAI-compatible embedding base URL by default',
+      BUILDING_CODE_EMBEDDING_MODEL: 'Optional override; inherits API Settings → Embeddings model by default',
+      BUILDING_CODE_EMBEDDING_DIMENSIONS:
+        'Optional override; inherits API Settings → Embeddings dimensions by default',
+      BUILDING_CODE_EMBEDDING_BASE_URL: 'Optional override; inherits API Settings → Embeddings by default',
       BUILDING_CODE_EMBEDDING_API_KEY:
-        'Optional override; inherits Memory OpenAI-compatible embedding API key by default',
+        'Optional override; inherits API Settings → Embeddings by default',
       BUILDING_CODE_EMBEDDING_TIMEOUT_MS:
         'Optional override; inherits Memory embedding timeout by default',
     },
@@ -108,18 +108,7 @@ export function resolveBuildingCodeRuntimeEnv(
   env: Record<string, string> = {},
   appConfig: AppConfig = configStore.getAll()
 ): Record<string, string> {
-  const resolved = resolveMemoryModelRuntimeConfig(
-    appConfig,
-    appConfig.memoryRuntime?.embedding,
-    'text-embedding-3-small'
-  );
-  const provider = resolved.provider;
-  const protocol = resolved.customProtocol;
-  const isOpenAICompatible =
-    provider === 'openai' ||
-    provider === 'openrouter' ||
-    provider === 'ollama' ||
-    (provider === 'custom' && protocol === 'openai');
+  const resolved = resolveEmbeddingRuntimeConfig(appConfig);
   const nextEnv = { ...env };
 
   try {
@@ -132,32 +121,20 @@ export function resolveBuildingCodeRuntimeEnv(
     // app.getPath can fail in isolated unit tests before Electron app is ready.
   }
 
-  if (!isOpenAICompatible) {
+  if (!resolved) {
     return nextEnv;
   }
 
-  const credentials =
-    provider === 'ollama'
-      ? resolveOllamaCredentials({
-          provider,
-          customProtocol: protocol,
-          apiKey: resolved.apiKey,
-          baseUrl: resolved.baseUrl,
-        })
-      : resolveOpenAICredentials({
-          provider,
-          customProtocol: protocol,
-          apiKey: resolved.apiKey,
-          baseUrl: resolved.baseUrl,
-        });
-
-  withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_API_KEY', credentials?.apiKey);
+  withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_API_KEY', resolved.apiKey);
   withFallbackEnv(
     nextEnv,
     'BUILDING_CODE_EMBEDDING_BASE_URL',
-    credentials?.baseUrl || normalizeOpenAICompatibleBaseUrl(resolved.baseUrl)
+    resolved.baseUrl || normalizeOpenAICompatibleBaseUrl(resolved.baseUrl)
   );
   withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_MODEL', resolved.model);
+  if (resolved.dimensions) {
+    withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_DIMENSIONS', String(resolved.dimensions));
+  }
   withFallbackEnv(nextEnv, 'BUILDING_CODE_EMBEDDING_TIMEOUT_MS', String(resolved.timeoutMs));
 
   return nextEnv;

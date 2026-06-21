@@ -206,6 +206,8 @@ function normalizeCodeNodeRecord(
   node: CodeNodeRecord,
   source: CodeSourceRecord | undefined
 ): CodeNodeRecord {
+  const parser = normalizeLoadedParserProvenance(node.parser);
+
   return {
     ...node,
     documentId: stringOrDefault(node.documentId, source?.documentId ?? node.sourceId),
@@ -213,9 +215,7 @@ function normalizeCodeNodeRecord(
       typeof node.extractionConfidence === 'number' && Number.isFinite(node.extractionConfidence)
         ? node.extractionConfidence
         : 1,
-    parser: isStructurallyValidParserProvenance(node.parser)
-      ? node.parser
-      : fallbackParserProvenance(source, node),
+    parser: parser ?? fallbackParserProvenance(source, node),
   };
 }
 
@@ -274,9 +274,7 @@ function normalizeCodeTableCitation(
     extractionConfidence: isFiniteNumber(citation.extractionConfidence)
       ? citation.extractionConfidence
       : parserFallbackNode.extractionConfidence,
-    parser: isStructurallyValidParserProvenance(citation.parser)
-      ? citation.parser
-      : fallbackParserProvenance(source, parserFallbackNode),
+    parser: normalizeLoadedParserProvenance(citation.parser) ?? parserFallbackNode.parser,
   };
 }
 
@@ -287,7 +285,7 @@ function fallbackParserProvenance(
   const isFixture = source?.sourceUrl.startsWith('fixture://') ?? false;
 
   return {
-    name: isFixture ? 'fixture' : 'docling',
+    name: isFixture ? 'fixture' : 'legacy',
     version: isFixture ? 'test-fixture' : 'unknown',
     sourceElementIds: [],
     pageRange: stringOrDefault(node.pageRange, ''),
@@ -295,19 +293,34 @@ function fallbackParserProvenance(
   };
 }
 
-function isStructurallyValidParserProvenance(value: unknown): value is CodeParserProvenance {
+function normalizeLoadedParserProvenance(value: unknown): CodeParserProvenance | null {
   if (!isRecord(value)) {
-    return false;
+    return null;
   }
 
-  return (
-    (value.name === 'docling' || value.name === 'fixture') &&
-    typeof value.version === 'string' &&
-    Array.isArray(value.sourceElementIds) &&
-    value.sourceElementIds.every((item) => typeof item === 'string') &&
-    typeof value.pageRange === 'string' &&
-    isLayoutBoxArray(value.boundingBoxes)
-  );
+  if (
+    !(
+      value.name === 'docling' ||
+      value.name === 'legacy' ||
+      value.name === 'liteparse' ||
+      value.name === 'fixture'
+    ) ||
+    typeof value.version !== 'string' ||
+    !Array.isArray(value.sourceElementIds) ||
+    value.sourceElementIds.some((item) => typeof item !== 'string') ||
+    typeof value.pageRange !== 'string' ||
+    !isLayoutBoxArray(value.boundingBoxes)
+  ) {
+    return null;
+  }
+
+  return {
+    name: value.name === 'docling' ? 'legacy' : value.name,
+    version: value.version,
+    sourceElementIds: value.sourceElementIds,
+    pageRange: value.pageRange,
+    boundingBoxes: value.boundingBoxes,
+  };
 }
 
 function isLayoutBoxArray(value: unknown): value is CodeLayoutBox[] {

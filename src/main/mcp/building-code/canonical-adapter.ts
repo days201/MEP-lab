@@ -2,12 +2,12 @@ import { buildNodeChunks } from './chunking';
 import { resolveCrossReferences } from './cross-reference';
 import { detectBuildingCodeHeading } from './heading-detector';
 import { stableNodeId, stableRecordId } from './hierarchy';
-import { buildStructuredTables } from './table';
+import { buildStructuredTables, collectStructuredTableFragments } from './table';
 import type {
-  NormalizedDoclingElement,
-  NormalizedDoclingResult,
-  NormalizedDoclingTable,
-} from './docling-parser';
+  NormalizedParserDocument,
+  NormalizedParserElement,
+  NormalizedParserTable,
+} from './parser-adapter';
 import type { BuildingCodeIngestionIndex } from './ingest';
 import type { PageText } from './pdf-extract';
 import type { CodeNodeRecord, CodeSourceRecord } from './types';
@@ -18,10 +18,12 @@ interface StackEntry {
   node: CodeNodeRecord;
 }
 
-export function adaptDoclingToBuildingCodeIndex(
-  parsed: NormalizedDoclingResult,
+export function adaptParserDocumentToBuildingCodeIndex(
+  parsed: NormalizedParserDocument,
   document: KnowledgeBaseDocumentRecord
 ): BuildingCodeIngestionIndex {
+  const parserVersion = parsed.parserVersion;
+  const parserName = parsed.parserName;
   const source: CodeSourceRecord = {
     sourceId: stableRecordId('source', [document.documentId, document.sourceChecksum]),
     documentId: document.documentId,
@@ -39,13 +41,16 @@ export function adaptDoclingToBuildingCodeIndex(
     sourceOffsetStart: 0,
     sourceOffsetEnd: page.text.length,
   }));
-  const nodes = buildNodes(parsed, source, document);
+  const nodes = buildNodes(parsed, source, document.documentId, parserName, parserVersion);
 
   if (!hasStructuralBuildingCodeHeading(nodes)) {
     throw new Error('no canonical building-code sections found');
   }
 
-  const tables = buildStructuredTables(nodes, parsed.tables, source);
+  const tables = buildStructuredTables(nodes, parsed.tables, source, {
+    name: parserName,
+    version: parserVersion,
+  });
   const crossReferences = resolveCrossReferences(nodes);
   const chunks = buildNodeChunks(nodes, source);
 
@@ -56,7 +61,12 @@ export function adaptDoclingToBuildingCodeIndex(
     chunks,
     tables,
     crossReferences,
-    diagnostics: parsed.diagnostics,
+    diagnostics: [
+      ...parsed.diagnostics,
+      ...(parsed.pageDiagnostics ?? [])
+        .filter((diagnostic) => diagnostic.severity !== 'info')
+        .map((diagnostic) => `Page ${diagnostic.pageNumber}: ${diagnostic.message}`),
+    ],
   };
 }
 
@@ -67,13 +77,14 @@ function hasStructuralBuildingCodeHeading(nodes: CodeNodeRecord[]): boolean {
 }
 
 function buildNodes(
-  parsed: NormalizedDoclingResult,
+  parsed: NormalizedParserDocument,
   source: CodeSourceRecord,
-  document: KnowledgeBaseDocumentRecord
+  documentId: string,
+  parserName: NormalizedParserDocument['parserName'],
+  parserVersion: string
 ): CodeNodeRecord[] {
   const nodes: CodeNodeRecord[] = [];
   const stack: StackEntry[] = [];
-  const parserVersion = parsed.parserVersion;
 
   for (const element of parsed.elements) {
     const heading = detectBuildingCodeHeading(element.text);
@@ -82,10 +93,29 @@ function buildNodes(
         stack.pop();
       }
       const parent = stack.at(-1)?.node ?? null;
+      const existing =
+        heading.nodeType === 'table'
+          ? nodes.find(
+              (candidate) =>
+                candidate.nodeType === 'table' && candidate.logicalRef === heading.logicalRef
+            ) ?? null
+          : null;
+
+      if (existing) {
+        appendSourceElementIds(existing, sourceIdsFor(element));
+        if (element.bbox) {
+          existing.parser.boundingBoxes.push({ pageNumber: element.pageNumber, ...element.bbox });
+        }
+        existing.extractionConfidence = Math.min(existing.extractionConfidence, element.confidence);
+        expandPageRange(existing, element.pageNumber);
+        stack.push({ level: heading.level, node: existing });
+        continue;
+      }
+
       const node: CodeNodeRecord = {
         nodeId: stableNodeId(source.sourceChecksum, heading.logicalRef, heading.nodeType),
         sourceId: source.sourceId,
-        documentId: document.documentId,
+        documentId,
         nodeType: heading.nodeType,
         logicalRef: heading.logicalRef,
         title: heading.title,
@@ -96,9 +126,9 @@ function buildNodes(
         childNodeIds: [],
         extractionConfidence: element.confidence,
         parser: {
-          name: 'docling',
+          name: parserName,
           version: parserVersion,
-          sourceElementIds: [element.elementId],
+          sourceElementIds: sourceIdsFor(element),
           pageRange: String(element.pageNumber),
           boundingBoxes: element.bbox ? [{ pageNumber: element.pageNumber, ...element.bbox }] : [],
         },
@@ -116,7 +146,7 @@ function buildNodes(
       continue;
     }
     current.text = current.text ? `${current.text}\n${element.text}` : element.text;
-    current.parser.sourceElementIds.push(element.elementId);
+    appendSourceElementIds(current, sourceIdsFor(element));
     if (element.bbox) {
       current.parser.boundingBoxes.push({ pageNumber: element.pageNumber, ...element.bbox });
     }
@@ -126,51 +156,50 @@ function buildNodes(
     expandPageRange(current, element.pageNumber);
   }
 
-  attachTableText(nodes, parsed.tables, parsed.elements, source, document, parserVersion);
+  attachTableText(nodes, parsed.tables, parsed.elements, source, parserName, parserVersion);
   return nodes.map((node) => ({ ...node, text: node.text.trim() }));
 }
 
 function attachTableText(
   nodes: CodeNodeRecord[],
-  tables: NormalizedDoclingTable[],
-  elements: NormalizedDoclingElement[],
+  tables: NormalizedParserTable[],
+  elements: NormalizedParserElement[],
   source: CodeSourceRecord,
-  document: KnowledgeBaseDocumentRecord,
+  parserName: NormalizedParserDocument['parserName'],
   parserVersion: string
 ): void {
   const elementsById = new Map(elements.map((element) => [element.elementId, element]));
+  const fragments = collectStructuredTableFragments(nodes, tables, source, {
+    name: parserName,
+    version: parserVersion,
+  });
 
-  for (const table of tables) {
-    const heading = detectBuildingCodeHeading(table.caption);
-    if (!heading || heading.nodeType !== 'table') {
+  for (const fragment of fragments) {
+    if (!hasMeaningfulStructuredTableContent(fragment)) {
       continue;
     }
-    const node =
-      nodes.find(
-        (candidate) => candidate.nodeType === 'table' && candidate.logicalRef === heading.logicalRef
-      ) ?? createTableNodeFromCaption(nodes, table, heading, source, document, parserVersion);
 
-    if (!node.parser.sourceElementIds.includes(table.elementId)) {
-      node.parser.sourceElementIds.push(table.elementId);
+    const node = fragment.node;
+    if (!node.tableId) {
+      node.tableId = stableRecordId('table', [
+        source.sourceChecksum,
+        node.nodeId,
+        fragment.fragments.map((table) => table.elementId).join('|'),
+      ]);
     }
-    appendTableElementBoundingBox(node, elementsById.get(table.elementId));
-    node.extractionConfidence = Math.min(node.extractionConfidence, table.confidence);
-    expandPageRange(node, table.pageNumber);
 
-    const markdown = [
-      table.caption,
-      `| ${table.columns.join(' | ')} |`,
-      `| ${table.columns.map(() => '---').join(' | ')} |`,
-      ...table.rows.map((row) => `| ${row.join(' | ')} |`),
-      ...table.notes,
-    ].join('\n');
+    for (const table of fragment.fragments) {
+      appendTableElementBoundingBox(node, elementsById.get(table.elementId));
+    }
+
+    const markdown = structuredTableMarkdown(fragment.caption, fragment.columns, fragment.rows, fragment.notes);
     node.text = node.text ? `${node.text}\n${markdown}` : markdown;
   }
 }
 
 function appendTableElementBoundingBox(
   node: CodeNodeRecord,
-  element: NormalizedDoclingElement | undefined
+  element: NormalizedParserElement | undefined
 ): void {
   if (!element?.bbox) {
     return;
@@ -193,57 +222,41 @@ function appendTableElementBoundingBox(
   node.parser.boundingBoxes.push(box);
 }
 
-function createTableNodeFromCaption(
-  nodes: CodeNodeRecord[],
-  table: NormalizedDoclingTable,
-  heading: NonNullable<ReturnType<typeof detectBuildingCodeHeading>>,
-  source: CodeSourceRecord,
-  document: KnowledgeBaseDocumentRecord,
-  parserVersion: string
-): CodeNodeRecord {
-  const parent = findNearestParentNode(nodes, table.pageNumber);
-  const node: CodeNodeRecord = {
-    nodeId: stableNodeId(source.sourceChecksum, heading.logicalRef, heading.nodeType),
-    sourceId: source.sourceId,
-    documentId: document.documentId,
-    nodeType: heading.nodeType,
-    logicalRef: heading.logicalRef,
-    title: heading.title,
-    text: '',
-    pageRange: String(table.pageNumber),
-    headingPath: [...(parent?.headingPath ?? []), table.caption],
-    parentNodeId: parent?.nodeId ?? null,
-    childNodeIds: [],
-    extractionConfidence: table.confidence,
-    parser: {
-      name: 'docling',
-      version: parserVersion,
-      sourceElementIds: [table.elementId],
-      pageRange: String(table.pageNumber),
-      boundingBoxes: [],
-    },
-  };
-
-  if (parent) {
-    parent.childNodeIds.push(node.nodeId);
-  }
-  nodes.push(node);
-  return node;
+function hasMeaningfulStructuredTableContent(
+  fragment: ReturnType<typeof collectStructuredTableFragments>[number]
+): boolean {
+  return fragment.columns.length > 0 || fragment.rows.length > 0 || fragment.notes.length > 0;
 }
 
-function findNearestParentNode(nodes: CodeNodeRecord[], pageNumber: number): CodeNodeRecord | null {
-  for (let index = nodes.length - 1; index >= 0; index -= 1) {
-    const candidate = nodes[index];
-    if (candidate.nodeType === 'table') {
-      continue;
-    }
-    const [startText] = candidate.pageRange.split('-');
-    const start = Number(startText);
-    if (!Number.isFinite(start) || start <= pageNumber) {
-      return candidate;
+function structuredTableMarkdown(
+  caption: string,
+  columns: string[],
+  rows: string[][],
+  notes: string[]
+): string {
+  return [caption, `| ${columns.join(' | ')} |`, `| ${columns.map(() => '---').join(' | ')} |`, ...rows.map((row) => `| ${row.join(' | ')} |`), ...notes].join('\n');
+}
+
+function sourceIdsFor(value: {
+  elementId: string;
+  sourceIds?: string[];
+}): string[] {
+  const sourceIds = Array.isArray(value.sourceIds) && value.sourceIds.length > 0
+    ? value.sourceIds
+    : [value.elementId];
+
+  return [...new Set(sourceIds)];
+}
+
+function appendSourceElementIds(
+  node: CodeNodeRecord,
+  sourceElementIds: string[]
+): void {
+  for (const sourceElementId of sourceElementIds) {
+    if (!node.parser.sourceElementIds.includes(sourceElementId)) {
+      node.parser.sourceElementIds.push(sourceElementId);
     }
   }
-  return null;
 }
 
 function expandPageRange(node: CodeNodeRecord, pageNumber: number): void {

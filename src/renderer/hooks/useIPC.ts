@@ -425,7 +425,12 @@ export function useIPC() {
 
   // Start a new session
   const startSession = useCallback(
-    async (title: string, promptOrContent: string | ContentBlock[], cwd?: string) => {
+    async (
+      title: string,
+      promptOrContent: string | ContentBlock[],
+      cwd?: string,
+      model?: string
+    ) => {
       setLoading(true);
       console.log('[useIPC] Starting session:', title);
 
@@ -505,6 +510,7 @@ export function useIPC() {
             prompt,
             cwd,
             content, // Send full content blocks including images
+            model,
           },
         });
         if (session) {

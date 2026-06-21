@@ -43,7 +43,7 @@ function node(sourceId: string, nodeId: string, logicalRef: string, text: string
     childNodeIds: [],
     extractionConfidence: 1,
     parser: {
-      name: 'docling',
+      name: 'legacy',
       version: 'test',
       sourceElementIds: [],
       pageRange: '1',

@@ -71,7 +71,22 @@ function buildCheckList(platform, arch) {
       type: 'dir',
       severity: 'fatal',
     },
+    {
+      label: 'LiteParse package',
+      relPath: 'node_modules/@llamaindex/liteparse/package.json',
+      type: 'file',
+      severity: 'fatal',
+    },
   ];
+  const liteParseNativePackage = liteParseNativePackageName(platform, arch);
+  if (liteParseNativePackage) {
+    checks.push({
+      label: `LiteParse native package (${liteParseNativePackage})`,
+      relPath: `node_modules/${liteParseNativePackage}/package.json`,
+      type: 'file',
+      severity: 'fatal',
+    });
+  }
 
   if (platform === 'darwin') {
     checks.push(
@@ -125,6 +140,26 @@ function buildCheckList(platform, arch) {
   }
 
   return checks;
+}
+
+/**
+ * Return the expected LiteParse native optional dependency package for a target.
+ *
+ * @param {string} platform - Node.js process.platform value
+ * @param {string} arch - Node.js process.arch value
+ * @returns {string | null}
+ */
+function liteParseNativePackageName(platform, arch) {
+  const packages = {
+    'darwin:arm64': '@llamaindex/liteparse-darwin-arm64',
+    'darwin:x64': '@llamaindex/liteparse-darwin-x64',
+    'linux:arm64': '@llamaindex/liteparse-linux-arm64-gnu',
+    'linux:x64': '@llamaindex/liteparse-linux-x64-gnu',
+    'win32:arm64': '@llamaindex/liteparse-win32-arm64-msvc',
+    'win32:x64': '@llamaindex/liteparse-win32-x64-msvc',
+  };
+
+  return packages[`${platform}:${arch}`] || null;
 }
 
 /**
@@ -193,9 +228,7 @@ function main() {
 
   const { passed, warnings, failed, hasFatal } = runChecks(PROJECT_ROOT, process.platform);
 
-  console.log(
-    `\nPre-build check: ${passed} passed, ${warnings} warnings, ${failed} failed`
-  );
+  console.log(`\nPre-build check: ${passed} passed, ${warnings} warnings, ${failed} failed`);
 
   if (hasFatal) {
     console.log(
@@ -208,7 +241,7 @@ function main() {
   process.exit(0);
 }
 
-module.exports = { runChecks, buildCheckList };
+module.exports = { runChecks, buildCheckList, liteParseNativePackageName };
 
 if (require.main === module) {
   main();

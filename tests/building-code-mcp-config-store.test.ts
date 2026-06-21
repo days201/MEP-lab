@@ -56,13 +56,7 @@ function makeOpenAIEmbeddingConfig(overrides: Partial<AppConfig> = {}): AppConfi
     sandboxEnabled: false,
     memoryEnabled: true,
     memoryRuntime: {
-      llm: {
-        inheritFromActive: true,
-        apiKey: '',
-        baseUrl: '',
-        model: '',
-        timeoutMs: 180000,
-      },
+      llm: { mode: 'use-agent-model' },
       embedding: {
         inheritFromActive: false,
         provider: 'custom',
@@ -133,6 +127,41 @@ describe('building-code MCP config preset', () => {
       BUILDING_CODE_EMBEDDING_BASE_URL: 'https://manual.example.test/v1',
       BUILDING_CODE_EMBEDDING_MODEL: 'manual-model',
       BUILDING_CODE_EMBEDDING_TIMEOUT_MS: '12000',
+    });
+  });
+
+  it('inherits embedding dimensions for Building_Code runtime env', () => {
+    const env = resolveBuildingCodeRuntimeEnv(
+      {},
+      makeOpenAIEmbeddingConfig({
+        activeConfigSetId: 'default',
+        configSets: [
+          {
+            id: 'default',
+            name: 'Default',
+            provider: 'openrouter',
+            customProtocol: 'openai',
+            activeProfileKey: 'openrouter',
+            profiles: {},
+            embedding: {
+              enabled: true,
+              provider: 'openrouter',
+              modelId: 'google/gemini-embedding-2',
+              dimensions: 384,
+              apiKey: 'sk-or-v1-embedding',
+              baseUrl: 'https://openrouter.ai/api/v1',
+              timeoutMs: 15000,
+            },
+            enableThinking: false,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      })
+    );
+
+    expect(env).toMatchObject({
+      BUILDING_CODE_EMBEDDING_MODEL: 'google/gemini-embedding-2',
+      BUILDING_CODE_EMBEDDING_DIMENSIONS: '384',
     });
   });
 

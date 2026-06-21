@@ -62,6 +62,31 @@ describe('building-code runner result wrapper', () => {
     expect(normalized.text).toContain('Class 2L refrigerants');
   });
 
+  it('wraps LiteParse-backed Building_Code MCP evidence instead of marking it unusable', () => {
+    const liteparseEvidence: BuildingCodeEvidence = {
+      ...citedEvidence,
+      citation: {
+        ...citedEvidence.citation,
+        parser: {
+          name: 'liteparse',
+          version: '2.0.0-liteparse',
+          sourceElementIds: ['page-1-block-2'],
+          pageRange: '1',
+          boundingBoxes: [{ pageNumber: 1, x: 10, y: 20, width: 300, height: 24 }],
+        },
+      },
+    };
+
+    const normalized = normalizeMcpToolResultForModel(
+      mcpTextResult({ results: [liteparseEvidence], diagnostics: {} }),
+      'mcp__Building_Code__search'
+    );
+
+    expect(normalized.text).toContain('<building_code_evidence>');
+    expect(normalized.text).toContain('ASHRAE 15 2022, Section 7.2');
+    expect(normalized.text).not.toContain('unusable');
+  });
+
   it('makes uncited Building_Code MCP results unusable without leaking raw text', () => {
     const uncitedResult = mcpTextResult({
       results: [

@@ -32,7 +32,7 @@ const requiredCitationStringFields = [
   'pageRange',
   'displayCitation',
 ] as const;
-const allowedParserNames = ['docling', 'fixture'] as const;
+const allowedParserNames = ['legacy', 'liteparse', 'fixture'] as const;
 
 export function buildDisplayCitation(input: DisplayCitationInput): string {
   const codeFamily = normalizeCitationPart(input.codeFamily);

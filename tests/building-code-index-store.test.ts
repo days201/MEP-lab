@@ -53,6 +53,126 @@ describe('building-code index store', () => {
     expect(loaded).toEqual(index);
   });
 
+  it('preserves LiteParse parser provenance across save and load', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+
+    const parser = {
+      name: 'liteparse' as const,
+      version: '0.7.1',
+      sourceElementIds: ['lp-table-1'],
+      pageRange: '12',
+      boundingBoxes: [
+        {
+          pageNumber: 12,
+          x: 72,
+          y: 144,
+          width: 360,
+          height: 120,
+        },
+      ],
+    };
+    const source = {
+      sourceId: 'source-liteparse-1',
+      documentId: 'doc-liteparse-1',
+      codeFamily: 'NBC',
+      edition: '2025',
+      jurisdictionScope: 'Canada',
+      sourceTitle: 'LiteParse NBC fixture',
+      sourceUrl: 'https://example.test/nbc-liteparse.pdf',
+      localSourcePath: 'fixtures/nbc-liteparse.pdf',
+      sourceChecksum: 'sha256:liteparse',
+    };
+    const index: BuildingCodeIndex = {
+      ...minimalIndex(),
+      sources: [source],
+      nodes: [
+        {
+          nodeId: 'node-liteparse-table-1',
+          sourceId: source.sourceId,
+          documentId: source.documentId,
+          nodeType: 'table',
+          logicalRef: 'Table 6.2.1.1',
+          title: 'LiteParse table',
+          text: 'LiteParse table text.',
+          pageRange: '12',
+          headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+          parentNodeId: null,
+          childNodeIds: [],
+          extractionConfidence: 0.93,
+          parser,
+        },
+      ],
+      tables: [
+        {
+          tableId: 'table-liteparse-1',
+          nodeId: 'node-liteparse-table-1',
+          caption: 'LiteParse table',
+          columns: ['Item', 'Value'],
+          rows: [
+            {
+              rowId: 'row-liteparse-1',
+              cells: ['A', 'B'],
+              citation: {
+                status: 'complete',
+                citationId: 'citation-liteparse-row-1',
+                sourceId: source.sourceId,
+                documentId: source.documentId,
+                codeFamily: source.codeFamily,
+                edition: source.edition,
+                jurisdictionScope: source.jurisdictionScope,
+                sourceTitle: source.sourceTitle,
+                sourceUrl: source.sourceUrl,
+                localSourcePath: source.localSourcePath,
+                sourceChecksum: source.sourceChecksum,
+                logicalRef: 'Table 6.2.1.1, Row 1',
+                nodeType: 'table-row',
+                pageRange: '12',
+                headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+                extractionConfidence: 0.93,
+                parser,
+                displayCitation: 'NBC 2025, Table 6.2.1.1, Row 1',
+              },
+            },
+          ],
+          notes: [
+            {
+              noteId: 'note-liteparse-a',
+              text: 'LiteParse note.',
+              citation: {
+                status: 'partial',
+                citationId: 'citation-liteparse-note-a',
+                sourceId: source.sourceId,
+                documentId: source.documentId,
+                codeFamily: source.codeFamily,
+                edition: source.edition,
+                jurisdictionScope: source.jurisdictionScope,
+                sourceTitle: source.sourceTitle,
+                sourceUrl: source.sourceUrl,
+                localSourcePath: source.localSourcePath,
+                sourceChecksum: source.sourceChecksum,
+                logicalRef: 'Table 6.2.1.1, Note a',
+                nodeType: 'table-note',
+                pageRange: '12',
+                headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+                extractionConfidence: 0.93,
+                parser,
+                displayCitation: 'NBC 2025, Table 6.2.1.1, Note a',
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    await saveBuildingCodeIndex(tempRoot, index);
+    const loaded = await loadBuildingCodeIndex(tempRoot);
+
+    expect(loaded.nodes[0].parser).toEqual(parser);
+    expect(loaded.tables[0].rows[0].citation.parser).toEqual(parser);
+    expect(loaded.tables[0].notes[0].citation.parser).toEqual(parser);
+  });
+
   it('rejects unsupported index schema versions', async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
     tempRoots.push(tempRoot);
@@ -279,6 +399,251 @@ describe('building-code index store', () => {
     ).not.toThrow();
   });
 
+  it('inherits LiteParse node provenance for table row and note citations with invalid provenance', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+
+    const liteParseParser = {
+      name: 'liteparse',
+      version: '0.7.1',
+      sourceElementIds: ['lp-table-1'],
+      pageRange: '12',
+      boundingBoxes: [
+        {
+          pageNumber: 12,
+          x: 72,
+          y: 144,
+          width: 360,
+          height: 120,
+        },
+      ],
+    };
+
+    fs.writeFileSync(
+      path.join(tempRoot, 'index.json'),
+      JSON.stringify({
+        ...minimalIndex(),
+        sources: [
+          {
+            sourceId: 'liteparse-source-1',
+            documentId: 'liteparse-doc-1',
+            codeFamily: 'NBC',
+            edition: '2025',
+            jurisdictionScope: 'Canada',
+            sourceTitle: 'LiteParse NBC fixture',
+            sourceUrl: 'https://example.test/nbc-liteparse.pdf',
+            localSourcePath: 'fixtures/nbc-liteparse.pdf',
+            sourceChecksum: 'sha256:liteparse',
+          },
+        ],
+        nodes: [
+          {
+            nodeId: 'liteparse-table-node-1',
+            sourceId: 'liteparse-source-1',
+            documentId: 'liteparse-doc-1',
+            nodeType: 'table',
+            logicalRef: 'Table 6.2.1.1',
+            title: 'LiteParse table',
+            text: 'LiteParse table text.',
+            pageRange: '12',
+            headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+            parentNodeId: null,
+            childNodeIds: [],
+            extractionConfidence: 0.93,
+            parser: liteParseParser,
+          },
+        ],
+        tables: [
+          {
+            tableId: 'liteparse-table-1',
+            nodeId: 'liteparse-table-node-1',
+            caption: 'LiteParse table',
+            columns: ['Item', 'Value'],
+            rows: [
+              {
+                rowId: 'liteparse-row-1',
+                cells: ['A', 'B'],
+                citation: {
+                  status: 'complete',
+                  citationId: 'liteparse-row-citation',
+                  sourceId: 'liteparse-source-1',
+                  documentId: 'liteparse-doc-1',
+                  codeFamily: 'NBC',
+                  edition: '2025',
+                  jurisdictionScope: 'Canada',
+                  sourceTitle: 'LiteParse NBC fixture',
+                  sourceUrl: 'https://example.test/nbc-liteparse.pdf',
+                  localSourcePath: 'fixtures/nbc-liteparse.pdf',
+                  sourceChecksum: 'sha256:liteparse',
+                  logicalRef: 'Table 6.2.1.1, Row 1',
+                  nodeType: 'table-row',
+                  pageRange: '12',
+                  headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+                  extractionConfidence: 0.93,
+                parser: {
+                    name: 'legacy',
+                    version: 'missing-fields',
+                  },
+                  displayCitation: 'NBC 2025, Table 6.2.1.1, Row 1',
+                },
+              },
+            ],
+            notes: [
+              {
+                noteId: 'liteparse-note-a',
+                text: 'LiteParse note.',
+                citation: {
+                  status: 'partial',
+                  citationId: 'liteparse-note-citation',
+                  sourceId: 'liteparse-source-1',
+                  documentId: 'liteparse-doc-1',
+                  codeFamily: 'NBC',
+                  edition: '2025',
+                  jurisdictionScope: 'Canada',
+                  sourceTitle: 'LiteParse NBC fixture',
+                  sourceUrl: 'https://example.test/nbc-liteparse.pdf',
+                  localSourcePath: 'fixtures/nbc-liteparse.pdf',
+                  sourceChecksum: 'sha256:liteparse',
+                  logicalRef: 'Table 6.2.1.1, Note a',
+                  nodeType: 'table-note',
+                  pageRange: '12',
+                  headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
+                  extractionConfidence: 0.93,
+                  displayCitation: 'NBC 2025, Table 6.2.1.1, Note a',
+                },
+              },
+            ],
+          },
+        ],
+        vectors: undefined,
+      })
+    );
+    fs.writeFileSync(path.join(tempRoot, 'vectors.json'), JSON.stringify({ version: 1, vectors: [] }));
+
+    const loaded = await loadBuildingCodeIndex(tempRoot);
+
+    expect(loaded.tables[0].rows[0].citation.parser).toEqual(liteParseParser);
+    expect(loaded.tables[0].notes[0].citation.parser).toEqual(liteParseParser);
+  });
+
+  it('migrates persisted Docling provenance to legacy provenance without dropping index data', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+
+    fs.writeFileSync(
+      path.join(tempRoot, 'index.json'),
+      JSON.stringify({
+        ...minimalIndex(),
+        sources: [
+          {
+            sourceId: 'docling-source-1',
+            documentId: 'docling-doc-1',
+            codeFamily: 'NBC',
+            edition: '2025',
+            jurisdictionScope: 'Canada',
+            sourceTitle: 'Legacy Docling NBC',
+            sourceUrl: 'kb://building-code/docling-doc-1/source.pdf',
+            localSourcePath: 'C:/kb/docling-source.pdf',
+            sourceChecksum: 'sha256:docling',
+          },
+        ],
+        nodes: [
+          {
+            nodeId: 'docling-node-1',
+            sourceId: 'docling-source-1',
+            documentId: 'docling-doc-1',
+            nodeType: 'section',
+            logicalRef: 'Section 9.10.3.1',
+            title: 'Fire separations',
+            text: 'Legacy Docling section text.',
+            pageRange: '12',
+            headingPath: ['NBC 2025', 'Section 9.10.3.1 Fire separations'],
+            parentNodeId: null,
+            childNodeIds: [],
+            extractionConfidence: 0.98,
+            parser: {
+              name: 'docling',
+              version: '2.0.0-docling',
+              sourceElementIds: ['page-12-block-3'],
+              pageRange: '12',
+              boundingBoxes: [{ pageNumber: 12, x: 10, y: 20, width: 30, height: 40 }],
+            },
+          },
+        ],
+        tables: [
+          {
+            tableId: 'docling-table-1',
+            nodeId: 'docling-node-1',
+            caption: 'Legacy table',
+            columns: ['Item', 'Value'],
+            rows: [
+              {
+                rowId: 'docling-row-1',
+                cells: ['A', 'B'],
+                citation: {
+                  status: 'complete',
+                  citationId: 'docling-row-citation',
+                  sourceId: 'docling-source-1',
+                  documentId: 'docling-doc-1',
+                  codeFamily: 'NBC',
+                  edition: '2025',
+                  jurisdictionScope: 'Canada',
+                  sourceTitle: 'Legacy Docling NBC',
+                  sourceUrl: 'kb://building-code/docling-doc-1/source.pdf',
+                  localSourcePath: 'C:/kb/docling-source.pdf',
+                  sourceChecksum: 'sha256:docling',
+                  logicalRef: 'Table 9.10.3.1, Row 1',
+                  nodeType: 'table-row',
+                  pageRange: '12',
+                  headingPath: ['NBC 2025', 'Section 9.10.3.1 Fire separations'],
+                  extractionConfidence: 0.98,
+                  parser: {
+                    name: 'docling',
+                    version: '2.0.0-docling',
+                    sourceElementIds: ['page-12-row-1'],
+                    pageRange: '12',
+                    boundingBoxes: [],
+                  },
+                  displayCitation: 'NBC 2025, Table 9.10.3.1, Row 1',
+                },
+              },
+            ],
+            notes: [],
+          },
+        ],
+        vectors: undefined,
+      })
+    );
+    fs.writeFileSync(path.join(tempRoot, 'vectors.json'), JSON.stringify({ version: 1, vectors: [] }));
+
+    const loaded = await loadBuildingCodeIndex(tempRoot);
+
+    expect(loaded.nodes[0].parser).toEqual({
+      name: 'legacy',
+      version: '2.0.0-docling',
+      sourceElementIds: ['page-12-block-3'],
+      pageRange: '12',
+      boundingBoxes: [{ pageNumber: 12, x: 10, y: 20, width: 30, height: 40 }],
+    });
+    expect(loaded.tables[0].rows[0].citation.parser).toEqual({
+      name: 'legacy',
+      version: '2.0.0-docling',
+      sourceElementIds: ['page-12-row-1'],
+      pageRange: '12',
+      boundingBoxes: [],
+    });
+    expect(() =>
+      assertCitedEvidence({
+        evidenceId: 'legacy-docling-row',
+        nodeId: 'docling-node-1',
+        evidenceKind: 'table-row',
+        excerpt: 'A | B',
+        applicabilityNotes: [],
+        citation: loaded.tables[0].rows[0].citation,
+      })
+    ).not.toThrow();
+  });
+
   it('creates an empty active index with semantic search unavailable', async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
     tempRoots.push(tempRoot);
@@ -331,7 +696,7 @@ describe('building-code index store', () => {
           childNodeIds: [],
           extractionConfidence: 1,
           parser: {
-            name: 'docling',
+            name: 'legacy',
             version: '2.0.0',
             sourceElementIds: ['h1'],
             pageRange: '1',

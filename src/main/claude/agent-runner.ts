@@ -1589,7 +1589,7 @@ ${hints.join('\n')}
 
       // Resolve model via pi-ai
       const runtimeConfig = configStore.getAll();
-      const modelString = this.getCurrentModelString(runtimeConfig.model);
+      const modelString = this.getCurrentModelString(session.model || runtimeConfig.model);
       const configProtocol = resolvePiRouteProtocol(
         runtimeConfig.provider,
         runtimeConfig.customProtocol
