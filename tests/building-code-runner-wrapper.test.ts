@@ -98,7 +98,7 @@ describe('building-code runner result wrapper', () => {
     expect(normalized.text).not.toContain('unusable');
   });
 
-  it('preserves model-normalized evidence when the UI formats tool_execution_end', () => {
+  it('preserves model-normalized search evidence when the UI formats tool_execution_end', () => {
     const modelResult = normalizeMcpToolResultForModel(
       mcpTextResult({ results: [citedEvidence], diagnostics: {} }),
       'mcp__Building_Code__search'
@@ -107,6 +107,22 @@ describe('building-code runner result wrapper', () => {
     const uiResult = normalizeToolExecutionResultForUi(
       customToolTextResult(modelResult.text),
       'mcp__Building_Code__search'
+    );
+
+    expect(uiResult.content).toBe(modelResult.text);
+    expect(uiResult.content).toContain('<building_code_evidence>');
+    expect(uiResult.content).not.toContain('tool result was not valid JSON');
+  });
+
+  it('preserves model-normalized read_section evidence when the UI formats tool_execution_end', () => {
+    const modelResult = normalizeMcpToolResultForModel(
+      mcpTextResult({ results: [citedEvidence], diagnostics: {} }),
+      'mcp__Building_Code__read_section'
+    );
+
+    const uiResult = normalizeToolExecutionResultForUi(
+      customToolTextResult(modelResult.text),
+      'mcp__Building_Code__read_section'
     );
 
     expect(uiResult.content).toBe(modelResult.text);
