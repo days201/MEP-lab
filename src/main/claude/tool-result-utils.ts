@@ -21,6 +21,11 @@ type NormalizedToolExecutionResult = {
   images: ToolResultImage[];
 };
 
+const BUILDING_CODE_EVIDENCE_OPEN = '<building_code_evidence>';
+const BUILDING_CODE_EVIDENCE_CLOSE = '</building_code_evidence>';
+const BUILDING_CODE_UNUSABLE_PREFIX =
+  'unusable: no canonical cited building-code evidence is available';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -162,18 +167,54 @@ function isBuildingCodeToolName(toolName: string | undefined): boolean {
   return typeof toolName === 'string' && toolName.startsWith('mcp__Building_Code__');
 }
 
+function isNormalizedBuildingCodeResultText(value: string): boolean {
+  const text = value.trim();
+  return (
+    (text.startsWith(BUILDING_CODE_EVIDENCE_OPEN) &&
+      text.endsWith(BUILDING_CODE_EVIDENCE_CLOSE)) ||
+    text.startsWith(BUILDING_CODE_UNUSABLE_PREFIX)
+  );
+}
+
+function buildingCodeToolErrorMessage(value: unknown): string | null {
+  if (
+    isRecord(value) &&
+    value.error === true &&
+    typeof value.message === 'string' &&
+    value.message.trim()
+  ) {
+    return value.message.trim();
+  }
+
+  return null;
+}
+
 function normalizeBuildingCodeResultText(rawText: string): string {
+  const normalizedText = rawText.trim();
+  if (isNormalizedBuildingCodeResultText(normalizedText)) {
+    return normalizedText;
+  }
+
   let parsed: unknown;
   try {
-    parsed = JSON.parse(rawText);
+    parsed = JSON.parse(normalizedText);
   } catch {
     return buildUnusableBuildingCodeResultMessage('tool result was not valid JSON');
+  }
+
+  const toolErrorMessage = buildingCodeToolErrorMessage(parsed);
+  if (toolErrorMessage) {
+    return buildUnusableBuildingCodeResultMessage(toolErrorMessage);
   }
 
   if (!isRecord(parsed) || !Array.isArray(parsed.results)) {
     return buildUnusableBuildingCodeResultMessage(
       'tool result did not include canonical cited evidence results'
     );
+  }
+
+  if (parsed.results.length === 0) {
+    return buildUnusableBuildingCodeResultMessage('no cited evidence was provided');
   }
 
   try {
@@ -220,14 +261,18 @@ export function normalizeToolExecutionResultForUi(
     const images = dedupeImages([...inlineImages, ...detailImages]);
     const content = finalizeText(textParts, images.length);
     return {
-      content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
+      content: isBuildingCodeToolName(toolName)
+        ? normalizeBuildingCodeResultText(content)
+        : content,
       images,
     };
   }
 
   const content = typeof result === 'string' ? result : safeStringifyToolResult(result);
   return {
-    content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
+    content: isBuildingCodeToolName(toolName)
+      ? normalizeBuildingCodeResultText(content)
+      : content,
     images: dedupeImages(detailImages),
   };
 }
