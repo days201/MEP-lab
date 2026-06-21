@@ -182,7 +182,7 @@ function buildingCodeToolErrorMessage(value: unknown): string | null {
   }
 
   const message = value.message.trim();
-  return message || null;
+  return message.length > 0 ? message : null;
 }
 
 function normalizeBuildingCodeResultText(rawText: string): string {
