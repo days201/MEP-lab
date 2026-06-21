@@ -223,8 +223,8 @@ export function Sidebar() {
 
   if (sidebarCollapsed) {
     return (
-      <aside className="w-[4.5rem] bg-surface/96 border-r border-border-muted flex flex-col overflow-hidden">
-        <div className="px-3 pt-4 pb-3 flex flex-col items-center gap-2 border-b border-border-muted">
+      <aside className="w-[4.5rem] bg-surface/96 border-r border-border flex flex-col overflow-hidden">
+        <div className="px-3 pt-4 pb-3 flex flex-col items-center gap-2 border-b border-border">
           <button
             onClick={toggleSidebar}
             className="w-9 h-9 rounded-2xl flex items-center justify-center hover:bg-surface-hover transition-colors text-text-secondary"
@@ -234,7 +234,7 @@ export function Sidebar() {
           </button>
           <button
             onClick={handleNewSession}
-            className="w-9 h-9 rounded-2xl flex items-center justify-center bg-background hover:bg-surface-hover transition-colors text-text-primary border border-border-subtle"
+            className="w-9 h-9 rounded-2xl flex items-center justify-center bg-background hover:bg-surface-hover transition-colors text-text-primary border border-border"
             title={t('sidebar.newTask')}
           >
             <Plus className="w-4 h-4" />
@@ -251,7 +251,7 @@ export function Sidebar() {
           </button>
         </div>
 
-        <div className="px-3 py-3 border-t border-border-muted flex flex-col items-center gap-2">
+        <div className="px-3 py-3 border-t border-border flex flex-col items-center gap-2">
           <button
             onClick={toggleTheme}
             className="w-9 h-9 rounded-2xl flex items-center justify-center hover:bg-surface-hover transition-colors text-text-secondary"
@@ -275,14 +275,14 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-[17.5rem] bg-surface/96 border-r border-border-muted flex flex-col overflow-hidden">
-      <div className="px-4 pt-5 pb-4 border-b border-border-muted">
+    <aside className="w-[17.5rem] bg-surface/96 border-r border-border flex flex-col overflow-hidden">
+      <div className="px-4 pt-5 pb-4 border-b border-border">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex items-center gap-3">
             <img
               src={sidebarLogoSrc}
               alt={t('common.appLogoAlt')}
-              className="w-10 h-10 rounded-2xl object-cover border border-border-subtle bg-background/60 flex-shrink-0"
+              className="w-10 h-10 rounded-2xl object-cover border border-border bg-background/60 flex-shrink-0"
             />
             <div className="min-w-0">
               <h1 className="text-[1.34rem] leading-none font-semibold tracking-[-0.035em] text-text-primary">
@@ -383,7 +383,7 @@ export function Sidebar() {
                               className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
                                 isSelected
                                   ? 'bg-accent text-white'
-                                  : 'border border-border-muted bg-background'
+                                  : 'border border-border bg-background'
                               }`}
                             >
                               {isSelected && <Check className="w-2.5 h-2.5" />}
@@ -416,7 +416,7 @@ export function Sidebar() {
       </div>
 
       {isSelectMode ? (
-        <div className="px-3 py-3 border-t border-border-muted">
+        <div className="px-3 py-3 border-t border-border">
           {showDeleteConfirm ? (
             <div className="border border-error/30 bg-error/10 rounded-lg px-3 py-3">
               <p className="text-[13px] text-text-primary mb-3">
@@ -470,7 +470,7 @@ export function Sidebar() {
           )}
         </div>
       ) : (
-        <div className="px-3 py-3 border-t border-border-muted">
+        <div className="px-3 py-3 border-t border-border">
           <div className="flex items-center gap-2 rounded-2xl bg-background/50 px-3 py-2.5">
             <button
               onClick={() => setShowSettings(true)}
