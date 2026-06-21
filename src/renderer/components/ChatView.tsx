@@ -663,11 +663,11 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-background">
+    <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
       {/* Header */}
       <div
         ref={headerRef}
-        className="relative h-12 border-b border-border-muted grid grid-cols-[1fr_auto_1fr] items-center px-4 lg:px-8 bg-background/88 backdrop-blur-md"
+        className="relative h-12 border-b border-border grid grid-cols-[1fr_auto_1fr] items-center px-4 lg:px-8 bg-background/88 backdrop-blur-md"
       >
         <div className="text-[11px] font-medium tracking-[0.08em] uppercase text-text-muted">
           MEP Lab
@@ -708,13 +708,11 @@ export function ChatView() {
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <div
           ref={messagesContainerRef}
-          className="w-full max-w-[920px] mx-auto py-8 px-5 lg:px-8 space-y-5"
+          className="w-full max-w-[920px] mx-auto pt-8 pb-40 px-5 lg:px-8 space-y-5"
         >
           {displayedMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-28 text-text-muted space-y-3 text-center">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-text-muted/80">
-                MEP Lab
-              </p>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-text-muted/80">MEP Lab</p>
               <p className="text-base text-text-secondary">{t('chat.startConversation')}</p>
             </div>
           ) : (
@@ -756,8 +754,8 @@ export function ChatView() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-border-muted bg-background/92 backdrop-blur-md">
-        <div className="max-w-[920px] mx-auto px-5 lg:px-8 py-5">
+      <div className="absolute bottom-0 left-0 right-0 bg-transparent pointer-events-none z-10">
+        <div className="max-w-[920px] mx-auto px-5 lg:px-8 pb-6 pt-2 pointer-events-auto">
           <ApiConfigBanner />
           <form
             onSubmit={handleSubmit}
@@ -781,7 +779,7 @@ export function ChatView() {
                       onClick={() => removeImage(index)}
                       className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
@@ -812,19 +810,10 @@ export function ChatView() {
             )}
 
             <div
-              className={`flex items-end gap-2 p-3.5 rounded-[1.75rem] bg-background/88 border border-border-muted shadow-soft transition-colors ${
+              className={`flex flex-col p-3 rounded-xl bg-surface border border-border shadow-soft transition-all focus-within:ring-2 focus-within:ring-accent/30 focus-within:border-accent ${
                 isDragging ? 'ring-2 ring-accent bg-accent/5' : ''
               }`}
             >
-              <button
-                type="button"
-                onClick={handleFileSelect}
-                className="w-9 h-9 rounded-2xl flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
-                title={t('welcome.attachFiles')}
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-
               <textarea
                 ref={textareaRef}
                 value={prompt}
@@ -849,43 +838,56 @@ export function ChatView() {
                 placeholder={t('chat.typeMessage')}
                 disabled={isSubmitting}
                 rows={1}
-                className="flex-1 resize-none bg-transparent border-none outline-none text-text-primary placeholder:text-text-muted text-[15px] py-2"
+                className="w-full resize-none bg-transparent border-none outline-none text-text-primary placeholder:text-text-muted text-[15px] py-1 px-1.5 min-h-[36px]"
               />
 
-              <div className="flex items-center gap-2">
-                <ComposerModelSelector
-                  appConfig={appConfig}
-                  value={activeSession?.model || appConfig?.model}
-                  disabled={isSubmitting}
-                  onSelect={(modelId) => {
-                    void handleComposerModelSelect(modelId);
-                  }}
-                />
+              <div className="flex items-center justify-between border-t border-border/50 pt-2.5 mt-2 flex-shrink-0">
+                <div className="flex items-center">
+                  <ComposerModelSelector
+                    appConfig={appConfig}
+                    value={activeSession?.model || appConfig?.model}
+                    disabled={isSubmitting}
+                    onSelect={(modelId) => {
+                      void handleComposerModelSelect(modelId);
+                    }}
+                  />
+                </div>
 
-                {canStop && (
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleStop}
-                    className="w-9 h-9 rounded-2xl flex items-center justify-center bg-error/10 text-error hover:bg-error/20 transition-colors"
-                    title={t('chat.stop')}
+                    onClick={handleFileSelect}
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    title={t('welcome.attachFiles')}
                   >
-                    <Square className="w-4 h-4" />
+                    <Plus className="w-5 h-5" />
                   </button>
-                )}
-                <button
-                  type="submit"
-                  disabled={
-                    (!prompt.trim() &&
-                      !textareaRef.current?.value.trim() &&
-                      pastedImages.length === 0 &&
-                      attachedFiles.length === 0) ||
-                    isSubmitting
-                  }
-                  className="w-9 h-9 rounded-2xl flex items-center justify-center bg-accent text-background disabled:opacity-50 disabled:cursor-not-allowed hover:bg-accent-hover transition-colors"
-                  title={t('chat.sendMessage')}
-                >
-                  <Send className="w-4 h-4" />
-                </button>
+
+                  {canStop && (
+                    <button
+                      type="button"
+                      onClick={handleStop}
+                      className="w-9 h-9 rounded-lg flex items-center justify-center bg-error/10 text-error hover:bg-error/20 transition-colors"
+                      title={t('chat.stop')}
+                    >
+                      <Square className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={
+                      (!prompt.trim() &&
+                        !textareaRef.current?.value.trim() &&
+                        pastedImages.length === 0 &&
+                        attachedFiles.length === 0) ||
+                      isSubmitting
+                    }
+                    className="w-9 h-9 rounded-lg flex items-center justify-center bg-accent text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-accent-hover transition-colors"
+                    title={t('chat.sendMessage')}
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 

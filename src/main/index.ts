@@ -116,6 +116,7 @@ if (configStore.isConfigured()) {
 // Disable hardware acceleration for better compatibility
 app.disableHardwareAcceleration();
 
+
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: SessionManager | null = null;
 let skillsManager: SkillsManager | null = null;
@@ -184,7 +185,7 @@ async function waitForDevServer(url: string, maxAttempts = 30, intervalMs = 500)
 // Single-instance lock: skip in dev mode so vite-plugin-electron can restart freely
 // without the old process blocking the new one during async cleanup.
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
-const ELECTRON_DEVTOOLS_DEBUG_PORT = '9223';
+const ELECTRON_DEVTOOLS_DEBUG_PORT = '9222';
 
 // Enable Chrome DevTools Protocol in dev mode so the renderer can be inspected
 // via chrome://inspect or connected to by Puppeteer/Playwright at localhost:9223.
@@ -228,8 +229,8 @@ if (!hasSingleInstanceLock) {
 
 // Tray instance (kept alive to prevent GC)
 let tray: Tray | null = null;
-const DARK_BG = '#171614';
-const LIGHT_BG = '#f5f3ee';
+const DARK_BG = '#09090b';
+const LIGHT_BG = '#ffffff';
 
 function buildMacMenu() {
   if (process.platform !== 'darwin') return;
@@ -1034,7 +1035,10 @@ app
   .catch((error) => {
     logError('[App] Startup failed:', error);
     const message = error instanceof Error ? error.message : 'Unknown startup error';
-    dialog.showErrorBox('MEP Lab Startup Failed', `${message}\n\nCheck the logs for more information.`);
+    dialog.showErrorBox(
+      'MEP Lab Startup Failed',
+      `${message}\n\nCheck the logs for more information.`
+    );
     app.quit();
   });
 
@@ -2767,7 +2771,8 @@ async function handleClientEvent(event: ClientEvent): Promise<unknown> {
     sendToRenderer({
       type: 'error',
       payload: {
-        message: 'The current profile has no usable credentials. Complete setup in API Settings first.',
+        message:
+          'The current profile has no usable credentials. Complete setup in API Settings first.',
         code: 'CONFIG_REQUIRED_ACTIVE_SET',
         action: 'open_api_settings',
       },

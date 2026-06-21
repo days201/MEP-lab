@@ -18,12 +18,12 @@ describe('ChatView Claude-style layout', () => {
     const source = readChatView();
     expect(source).toContain('MEP Lab');
     expect(source).toContain('bg-background/88');
-    expect(source).toContain('border-border-muted');
+    expect(source).toContain('border-border');
   });
 
   it('uses a softer rounded composer shell instead of the previous heavy input bar', () => {
     const source = readChatView();
-    expect(source).toContain('rounded-[1.75rem]');
+    expect(source).toContain('rounded-xl');
     expect(source).toContain('shadow-soft');
   });
 });
