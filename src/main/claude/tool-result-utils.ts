@@ -224,6 +224,10 @@ function normalizeBuildingCodeResultText(rawText: string): string {
   }
 }
 
+function normalizeBuildingCodeTextIfNeeded(text: string, toolName: string | undefined): string {
+  return isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(text) : text;
+}
+
 export function normalizeMcpToolResultForModel(
   result: unknown,
   toolName?: string
@@ -233,14 +237,14 @@ export function normalizeMcpToolResultForModel(
     const { textParts, images } = extractTextAndImagesFromContent(resultObj.content);
     const text = finalizeText(textParts, images.length);
     return {
-      text: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(text) : text,
+      text: normalizeBuildingCodeTextIfNeeded(text, toolName),
       images,
     };
   }
 
   const text = typeof result === 'string' ? result : safeStringifyToolResult(result);
   return {
-    text: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(text) : text,
+    text: normalizeBuildingCodeTextIfNeeded(text, toolName),
     images: [],
   };
 }
@@ -257,14 +261,14 @@ export function normalizeToolExecutionResultForUi(
     const images = dedupeImages([...inlineImages, ...detailImages]);
     const content = finalizeText(textParts, images.length);
     return {
-      content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
+      content: normalizeBuildingCodeTextIfNeeded(content, toolName),
       images,
     };
   }
 
   const content = typeof result === 'string' ? result : safeStringifyToolResult(result);
   return {
-    content: isBuildingCodeToolName(toolName) ? normalizeBuildingCodeResultText(content) : content,
+    content: normalizeBuildingCodeTextIfNeeded(content, toolName),
     images: dedupeImages(detailImages),
   };
 }
