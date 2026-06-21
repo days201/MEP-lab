@@ -1,4 +1,4 @@
-export type ParserName = 'docling' | 'liteparse' | 'fixture';
+export type ParserName = 'liteparse' | 'fixture';
 export type ParserExtractionMode = 'native' | 'ocr' | 'native_plus_ocr';
 export type ParserElementKind = 'heading' | 'text' | 'table' | 'figure' | 'list' | 'unknown';
 export type ParserDiagnosticSeverity = 'info' | 'warning' | 'error';
@@ -73,7 +73,7 @@ export interface ParseDocumentInput {
 
 export type ParseDocument = (input: ParseDocumentInput) => Promise<NormalizedParserDocument>;
 
-const supportedParserNames = new Set<ParserName>(['docling', 'liteparse', 'fixture']);
+const supportedParserNames = new Set<ParserName>(['liteparse', 'fixture']);
 const supportedElementKinds = new Set<ParserElementKind>([
   'heading',
   'text',
@@ -93,7 +93,7 @@ export function normalizeParserDocument(value: unknown): NormalizedParserDocumen
   const parserName = requireString(record.parserName, 'parserName');
 
   if (!supportedParserNames.has(parserName as ParserName)) {
-    throwInvalid('parserName must be docling, liteparse, or fixture');
+    throwInvalid('parserName must be liteparse or fixture');
   }
 
   return {

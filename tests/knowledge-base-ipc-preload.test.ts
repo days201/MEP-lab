@@ -59,6 +59,8 @@ describe('knowledge-base IPC and preload surface', () => {
     expect(knowledgeBaseService).toContain('parseDocumentWithLiteParse(input)');
     expect(knowledgeBaseService).toContain("parserName: 'liteparse'");
     expect(knowledgeBaseService).not.toContain('parseDocumentWithDocling({');
+    expect(knowledgeBaseService).not.toContain('pythonPath?: string');
+    expect(knowledgeBaseService).not.toContain('void options.pythonPath');
   });
 
   it('validates runtime IPC payloads before calling the service', () => {

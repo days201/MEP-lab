@@ -79,6 +79,17 @@ describe('building-code parser-neutral adapter contract', () => {
   it('rejects unsupported parser names', () => {
     expect(() =>
       normalizeParserDocument({
+        parserName: 'docling',
+        parserVersion: '1',
+        pages: [],
+        elements: [],
+        tables: [],
+        diagnostics: [],
+        pageDiagnostics: [],
+      })
+    ).toThrow('Parser returned invalid result: parserName must be liteparse or fixture');
+    expect(() =>
+      normalizeParserDocument({
         parserName: 'unknown-parser',
         parserVersion: '1',
         pages: [],
@@ -87,7 +98,7 @@ describe('building-code parser-neutral adapter contract', () => {
         diagnostics: [],
         pageDiagnostics: [],
       })
-    ).toThrow('Parser returned invalid result: parserName must be docling, liteparse, or fixture');
+    ).toThrow('Parser returned invalid result: parserName must be liteparse or fixture');
   });
 
   it('defaults absent optional arrays while rejecting malformed optional arrays', () => {

@@ -15,6 +15,8 @@ import { useIPC } from '../hooks/useIPC';
 import { MessageCard } from './MessageCard';
 import type { Message, ContentBlock } from '../types';
 import { Send, Square, Plus, Loader2, Plug, X, Clock } from 'lucide-react';
+import { ComposerModelSelector } from './ComposerModelSelector';
+import { ApiConfigBanner } from './ApiConfigBanner';
 
 type AttachedFile = {
   name: string;
@@ -36,6 +38,7 @@ export function ChatView() {
   const executionClock = useActiveExecutionClock();
   const appConfig = useAppConfig();
   const setGlobalNotice = useAppStore((s) => s.setGlobalNotice);
+  const setAppConfig = useAppStore((s) => s.setAppConfig);
   const { continueSession, stopSession, isElectron } = useIPC();
   const [prompt, setPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -547,6 +550,38 @@ export function ChatView() {
     return () => observer.disconnect();
   }, [activeSession?.title, activeConnectors.length]);
 
+  const handleComposerModelSelect = useCallback(
+    async (modelId: string) => {
+      if (!isElectron || !appConfig) return;
+      const profileKey = appConfig.activeProfileKey;
+      const profile = appConfig.profiles?.[profileKey];
+      const models = profile?.models?.length
+        ? profile.models
+        : profile?.model
+          ? [{ id: profile.model }]
+          : [];
+      const nextModels = models.some((entry) => entry.id === modelId)
+        ? models
+        : [...models, { id: modelId }];
+      const result = await window.electronAPI.config.save({
+        model: modelId,
+        activeProfileKey: profileKey,
+        profiles: {
+          [profileKey]: {
+            ...profile,
+            apiKey: profile?.apiKey || '',
+            model: modelId,
+            models: nextModels,
+          },
+        },
+      });
+      if (result.success && result.config) {
+        setAppConfig(result.config);
+      }
+    },
+    [appConfig, isElectron, setAppConfig]
+  );
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
@@ -723,6 +758,7 @@ export function ChatView() {
       {/* Input */}
       <div className="border-t border-border-muted bg-background/92 backdrop-blur-md">
         <div className="max-w-[920px] mx-auto px-5 lg:px-8 py-5">
+          <ApiConfigBanner />
           <form
             onSubmit={handleSubmit}
             onDragOver={handleDragOver}
@@ -817,10 +853,14 @@ export function ChatView() {
               />
 
               <div className="flex items-center gap-2">
-                {/* Model display */}
-                <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full border border-border-subtle bg-background/60 text-xs text-text-muted">
-                  {appConfig?.model || t('chat.noModel')}
-                </span>
+                <ComposerModelSelector
+                  appConfig={appConfig}
+                  value={activeSession?.model || appConfig?.model}
+                  disabled={isSubmitting}
+                  onSelect={(modelId) => {
+                    void handleComposerModelSelect(modelId);
+                  }}
+                />
 
                 {canStop && (
                   <button

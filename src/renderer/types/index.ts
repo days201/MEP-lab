@@ -458,6 +458,7 @@ export type ClientEvent =
         allowedTools?: string[];
         content?: ContentBlock[];
         memoryEnabled?: boolean;
+        model?: string;
       };
     }
   | {
@@ -543,7 +544,7 @@ export type ServerEvent =
   | { type: 'new-session' }
   | { type: 'navigate'; payload: string }
   | { type: 'scheduled-task.error'; payload: { taskId: string; error: string } }
-  | { type: 'error'; payload: { message: string; code?: 'CONFIG_REQUIRED_ACTIVE_SET'; action?: 'open_api_settings' } };
+  | { type: 'error'; payload: { message: string; code?: 'CONFIG_REQUIRED_ACTIVE_SET'; action?: 'open_api_settings' | 'open_api_settings_embeddings' | 'open_api_settings_agent' } };
 
 // Settings types
 export interface Settings {
@@ -588,10 +589,34 @@ export type ProviderProfileKey =
   | 'custom:gemini';
 export type ConfigSetId = string;
 
+export interface AgentModelConfig {
+  id: string;
+  label?: string;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+}
+
+export interface EmbeddingRuntimeConfig {
+  enabled: boolean;
+  provider: ProviderType;
+  customProtocol?: CustomProtocolType;
+  apiKey?: string;
+  baseUrl?: string;
+  modelId: string;
+  dimensions?: number;
+  timeoutMs?: number;
+}
+
+export interface MemoryLlmMode {
+  mode: 'disabled' | 'use-agent-model' | 'use-specific-agent-model';
+  selectedModelId?: string;
+}
+
 export interface ProviderProfile {
   apiKey: string;
   baseUrl?: string;
   model: string;
+  models?: AgentModelConfig[];
   contextWindow?: number;
   maxTokens?: number;
 }
@@ -604,6 +629,7 @@ export interface ApiConfigSet {
   customProtocol: CustomProtocolType;
   activeProfileKey: ProviderProfileKey;
   profiles: Partial<Record<ProviderProfileKey, ProviderProfile>>;
+  embedding?: EmbeddingRuntimeConfig;
   enableThinking: boolean;
   updatedAt: string;
 }
@@ -625,8 +651,9 @@ export interface MemoryModelRuntimeConfig {
 }
 
 export interface MemoryRuntimeConfig {
-  llm: MemoryModelRuntimeConfig;
-  embedding: MemoryModelRuntimeConfig;
+  llm: MemoryLlmMode | MemoryModelRuntimeConfig;
+  /** @deprecated Legacy field — migrated to ApiConfigSet.embedding on load */
+  embedding?: MemoryModelRuntimeConfig;
   useEmbedding: boolean;
   maxNavSteps: number;
   ingestionConcurrency: number;

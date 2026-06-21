@@ -4,6 +4,7 @@ import { useAppStore } from '../store';
 import type {
   ApiConfigSet,
   AppConfig,
+  AgentModelConfig,
   ApiTestResult,
   CustomProtocolType,
   DiagnosticResult,
@@ -40,6 +41,7 @@ interface UIProviderProfile {
   apiKey: string;
   baseUrl: string;
   model: string;
+  models: AgentModelConfig[];
   customModel: string;
   useCustomModel: boolean;
   contextWindow: string;
@@ -197,6 +199,7 @@ function defaultProfileForKey(
     apiKey: '',
     baseUrl: preset.baseUrl,
     model: profileKey === 'ollama' ? '' : (preset.models[0]?.id || ''),
+    models: preset.models.map((item) => ({ id: item.id, label: item.name })),
     customModel: '',
     useCustomModel: prefersCustomInput,
     contextWindow: '',
@@ -251,6 +254,7 @@ function normalizeProfile(
       ...fallback,
       apiKey: '',
       baseUrl: fallback.baseUrl,
+      models: [],
       customModel: '',
       useCustomModel: true,
       contextWindow: '',
@@ -263,12 +267,19 @@ function normalizeProfile(
   const hasPresetModel = modelPresetForProfile(profileKey, presets).models.some(
     (item) => item.id === modelValue
   );
+  const models: AgentModelConfig[] =
+    profile?.models && profile.models.length > 0
+      ? profile.models
+      : modelValue
+        ? [{ id: modelValue }]
+        : [];
   return {
     apiKey: profile?.apiKey || '',
     baseUrl: profileKey === 'ollama'
       ? (normalizeOllamaBaseUrl(rawBaseUrl) || fallback.baseUrl)
       : rawBaseUrl,
     model: hasPresetModel ? modelValue : fallback.model,
+    models,
     customModel: hasPresetModel ? '' : modelValue,
     useCustomModel: !hasPresetModel,
     contextWindow: profile?.contextWindow ? String(profile.contextWindow) : '',
@@ -345,10 +356,17 @@ function toPersistedProfiles(
     const finalModel = profile.useCustomModel
       ? profile.customModel.trim() || profile.model
       : profile.model;
+    const models =
+      profile.models.length > 0
+        ? profile.models
+        : finalModel
+          ? [{ id: finalModel }]
+          : [];
     persisted[key] = {
       apiKey: profile.apiKey,
       baseUrl: profile.baseUrl.trim() || undefined,
       model: finalModel,
+      models: models.length > 0 ? models : undefined,
       contextWindow: profile.contextWindow ? Number(profile.contextWindow) : undefined,
       maxTokens: profile.maxTokens ? Number(profile.maxTokens) : undefined,
     };
@@ -1200,16 +1218,64 @@ export function useApiConfigState(options: UseApiConfigStateOptions = {}) {
 
   const setModel = useCallback(
     (value: string) => {
-      updateActiveProfile((prev) => ({ ...prev, model: value, useCustomModel: false }));
+      updateActiveProfile((prev) => {
+        const models = prev.models.some((entry) => entry.id === value)
+          ? prev.models
+          : [...prev.models, { id: value }];
+        return { ...prev, model: value, models, useCustomModel: false };
+      });
     },
     [updateActiveProfile]
   );
 
   const setCustomModel = useCallback(
     (value: string) => {
-      updateActiveProfile((prev) => ({ ...prev, customModel: value, useCustomModel: true }));
+      updateActiveProfile((prev) => ({
+        ...prev,
+        customModel: value,
+        useCustomModel: true,
+        model: value,
+        models: value.trim()
+          ? prev.models.some((entry) => entry.id === value.trim())
+            ? prev.models
+            : [...prev.models, { id: value.trim() }]
+          : prev.models,
+      }));
     },
     [updateActiveProfile]
+  );
+
+  const addModel = useCallback(
+    (modelId: string) => {
+      const trimmed = modelId.trim();
+      if (!trimmed) return;
+      updateActiveProfile((prev) => {
+        if (prev.models.some((entry) => entry.id === trimmed)) {
+          return prev;
+        }
+        return { ...prev, models: [...prev.models, { id: trimmed }] };
+      });
+    },
+    [updateActiveProfile]
+  );
+
+  const removeModel = useCallback(
+    (modelId: string) => {
+      updateActiveProfile((prev) => {
+        const nextModels = prev.models.filter((entry) => entry.id !== modelId);
+        const nextModel =
+          prev.model === modelId ? nextModels[0]?.id || prev.model : prev.model;
+        return { ...prev, models: nextModels, model: nextModel };
+      });
+    },
+    [updateActiveProfile]
+  );
+
+  const setSelectedModel = useCallback(
+    (modelId: string) => {
+      setModel(modelId);
+    },
+    [setModel]
   );
 
   const setContextWindow = useCallback(
@@ -2053,6 +2119,7 @@ export function useApiConfigState(options: UseApiConfigStateOptions = {}) {
     model,
     customModel,
     useCustomModel,
+    agentModels: currentProfile.models,
     contextWindow,
     maxTokens,
     modelInputPlaceholder: modelInputGuidance.placeholder,
@@ -2092,6 +2159,9 @@ export function useApiConfigState(options: UseApiConfigStateOptions = {}) {
     setBaseUrl,
     setModel,
     setCustomModel,
+    addModel,
+    removeModel,
+    setSelectedModel,
     setContextWindow,
     setMaxTokens,
     toggleCustomModel,

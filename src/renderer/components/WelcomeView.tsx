@@ -1,9 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../store';
 import { useIPC } from '../hooks/useIPC';
 import type { ContentBlock } from '../types';
 import { getInitialSessionTitle } from '../../shared/session-title';
+import { ComposerModelSelector } from './ComposerModelSelector';
+import { ApiConfigBanner } from './ApiConfigBanner';
+import { useAppConfig } from '../store/selectors';
 import {
   FileText,
   BarChart3,
@@ -41,10 +44,53 @@ export function WelcomeView() {
   const { startSession, changeWorkingDir, isElectron } = useIPC();
   const workingDir = useAppStore((state) => state.workingDir);
   const setGlobalNotice = useAppStore((state) => state.setGlobalNotice);
+  const setSettingsSection = useAppStore((state) => state.setSettingsSection);
   const isConfigured = useAppStore((state) => state.isConfigured);
   const setShowSettings = useAppStore((state) => state.setShowSettings);
   const setSettingsTab = useAppStore((state) => state.setSettingsTab);
+  const appConfig = useAppConfig();
+  const setAppConfig = useAppStore((state) => state.setAppConfig);
+  const [composerModel, setComposerModel] = useState(appConfig?.model || '');
   const canSubmit = prompt.trim().length > 0 || pastedImages.length > 0 || attachedFiles.length > 0;
+
+  useEffect(() => {
+    if (appConfig?.model) {
+      setComposerModel(appConfig.model);
+    }
+  }, [appConfig?.model]);
+
+  const handleComposerModelSelect = useCallback(
+    async (modelId: string) => {
+      setComposerModel(modelId);
+      if (!isElectron || !appConfig) return;
+      const profileKey = appConfig.activeProfileKey;
+      const profile = appConfig.profiles?.[profileKey];
+      const models = profile?.models?.length
+        ? profile.models
+        : profile?.model
+          ? [{ id: profile.model }]
+          : [];
+      const nextModels = models.some((entry) => entry.id === modelId)
+        ? models
+        : [...models, { id: modelId }];
+      const result = await window.electronAPI.config.save({
+        model: modelId,
+        activeProfileKey: profileKey,
+        profiles: {
+          [profileKey]: {
+            ...profile,
+            apiKey: profile?.apiKey || '',
+            model: modelId,
+            models: nextModels,
+          },
+        },
+      });
+      if (result.success && result.config) {
+        setAppConfig(result.config);
+      }
+    },
+    [appConfig, isElectron, setAppConfig]
+  );
 
   const handleSelectFolder = async () => {
     try {
@@ -349,7 +395,12 @@ export function WelcomeView() {
     setIsSubmitting(true);
     try {
       const sessionTitle = getInitialSessionTitle(currentPrompt, attachedFiles[0]?.name);
-      const session = await startSession(sessionTitle, contentBlocks, workingDir || undefined);
+      const session = await startSession(
+        sessionTitle,
+        contentBlocks,
+        workingDir || undefined,
+        composerModel || appConfig?.model
+      );
       if (session) {
         setPrompt('');
         if (textareaRef.current) {
@@ -466,6 +517,7 @@ export function WelcomeView() {
             <button
               type="button"
               onClick={() => {
+                setSettingsSection('agent');
                 setSettingsTab('api');
                 setShowSettings(true);
               }}
@@ -513,6 +565,7 @@ export function WelcomeView() {
         </div>
 
         {/* Main Input Card - Right aligned */}
+        <ApiConfigBanner />
         <form
           onSubmit={handleSubmit}
           onDragOver={handleDragOver}
@@ -629,6 +682,15 @@ export function WelcomeView() {
               )}
             </div>
 
+            <div className="flex items-center gap-3">
+              <ComposerModelSelector
+                appConfig={appConfig}
+                value={composerModel}
+                disabled={isSubmitting}
+                onSelect={(modelId) => {
+                  void handleComposerModelSelect(modelId);
+                }}
+              />
             <button
               type="submit"
               disabled={!canSubmit || isSubmitting}
@@ -637,6 +699,7 @@ export function WelcomeView() {
               <span>{isSubmitting ? t('welcome.starting') : t('welcome.letsGo')}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+            </div>
           </div>
         </form>
       </div>

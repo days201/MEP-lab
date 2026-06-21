@@ -20,7 +20,7 @@ export interface CodeLayoutBox {
 }
 
 export interface CodeParserProvenance {
-  name: 'docling' | 'liteparse' | 'fixture';
+  name: 'legacy' | 'liteparse' | 'fixture';
   version: string;
   sourceElementIds: string[];
   pageRange: string;

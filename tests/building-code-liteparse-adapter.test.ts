@@ -117,6 +117,25 @@ describe('building-code LiteParse adapter', () => {
     });
   });
 
+  it('keeps table-like prose out of the table classification path', () => {
+    const document = normalizeLiteParseResult({
+      parserVersion: '2.1.2',
+      pages: [
+        litePage(1, 'Table 1 lists the required ratings.', [
+          textItem('Table 1 lists the required ratings.', 10, 20, 240, 18),
+        ]),
+      ],
+    });
+
+    expect(document.elements).toEqual([
+      expect.objectContaining({
+        kind: 'text',
+        text: 'Table 1 lists the required ratings.',
+      }),
+    ]);
+    expect(document.tables).toEqual([]);
+  });
+
   it('groups split LiteParse text runs into canonical heading and table lines', () => {
     const document = normalizeLiteParseResult({
       parserVersion: '2.1.2',

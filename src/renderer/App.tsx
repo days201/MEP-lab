@@ -77,6 +77,8 @@ function App() {
   const clearGlobalNotice = useAppStore((s) => s.clearGlobalNotice);
   const setSandboxSetupComplete = useAppStore((s) => s.setSandboxSetupComplete);
   const setShowSettings = useAppStore((s) => s.setShowSettings);
+  const setSettingsTab = useAppStore((s) => s.setSettingsTab);
+  const setSettingsSection = useAppStore((s) => s.setSettingsSection);
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed);
   const setContextPanelCollapsed = useAppStore((s) => s.setContextPanelCollapsed);
 
@@ -154,12 +156,21 @@ function App() {
 
   const handleGlobalNoticeAction = useCallback(
     (action: GlobalNoticeAction) => {
-      if (action === 'open_api_settings') {
-        setShowConfigModal(true);
+      if (
+        action === 'open_api_settings' ||
+        action === 'open_api_settings_agent'
+      ) {
+        setSettingsSection('agent');
+        setSettingsTab('api');
+        setShowSettings(true);
+      } else if (action === 'open_api_settings_embeddings') {
+        setSettingsSection('embeddings');
+        setSettingsTab('api');
+        setShowSettings(true);
       }
       clearGlobalNotice();
     },
-    [clearGlobalNotice, setShowConfigModal]
+    [clearGlobalNotice, setSettingsSection, setSettingsTab, setShowSettings]
   );
 
   // Determine if we should show the sandbox setup dialog

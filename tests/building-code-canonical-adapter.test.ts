@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  adaptDoclingToBuildingCodeIndex,
   adaptParserDocumentToBuildingCodeIndex,
 } from '../src/main/mcp/building-code/canonical-adapter';
 import { detectBuildingCodeHeading } from '../src/main/mcp/building-code/heading-detector';
-import { ingestParsedBuildingCodeDocument } from '../src/main/mcp/building-code/ingest';
 import { buildStructuredTables } from '../src/main/mcp/building-code/table';
-import type { NormalizedDoclingResult } from '../src/main/mcp/building-code/docling-parser';
 import type { NormalizedParserDocument } from '../src/main/mcp/building-code/parser-adapter';
 import type { CodeNodeRecord, CodeSourceRecord } from '../src/main/mcp/building-code/types';
 import type { KnowledgeBaseDocumentRecord } from '../src/shared/ipc-types';
@@ -20,7 +17,7 @@ function documentRecord(): KnowledgeBaseDocumentRecord {
     sourceChecksum: 'sha256:doc',
     sourcePath: '/tmp/NBC.pdf',
     sourceUri: 'kb://building-code/doc-1/NBC.pdf',
-    parserName: 'docling',
+    parserName: 'fixture',
     parserVersion: '2.0.0',
     status: 'parsing',
     uploadedAt: '2026-06-19T12:00:00.000Z',
@@ -35,6 +32,7 @@ function documentRecord(): KnowledgeBaseDocumentRecord {
     },
     diagnostics: [],
     failureMessage: null,
+    progress: null,
     indexSummary: {
       nodeCount: 0,
       tableCount: 0,
@@ -47,9 +45,9 @@ function documentRecord(): KnowledgeBaseDocumentRecord {
   };
 }
 
-function parsedDocument(): NormalizedDoclingResult {
+function parsedDocument(): NormalizedParserDocument {
   return {
-    parserName: 'docling',
+    parserName: 'fixture',
     parserVersion: '2.0.0',
     pages: [
       {
@@ -115,14 +113,14 @@ function parsedDocument(): NormalizedDoclingResult {
         pageNumber: 1,
         extractionMode: 'native',
         severity: 'info',
-        message: 'Docling native extraction accepted',
+        message: 'Fixture native extraction accepted',
         reasons: [],
       },
       {
         pageNumber: 2,
         extractionMode: 'native',
         severity: 'info',
-        message: 'Docling native extraction accepted',
+        message: 'Fixture native extraction accepted',
         reasons: [],
       },
     ],
@@ -158,7 +156,7 @@ function tableNode(overrides: Partial<CodeNodeRecord> = {}): CodeNodeRecord {
     childNodeIds: [],
     extractionConfidence: 0.95,
     parser: {
-      name: 'docling',
+      name: 'fixture',
       version: '2.0.0',
       sourceElementIds: ['caption-heading'],
       pageRange: '2',
@@ -210,10 +208,25 @@ describe('building-code canonical adapter', () => {
     ])('ignores body prose that starts with a reference: %s', (text) => {
       expect(detectBuildingCodeHeading(text)).toBeNull();
     });
+
+    it.each(['Table 1 lists the required ratings.', 'Table 10 1 | 2 | 3'])(
+      'ignores table-like prose or data rows: %s',
+      (text) => {
+        expect(detectBuildingCodeHeading(text)).toBeNull();
+      }
+    );
+
+    it('keeps valid table captions with inline equals signs', () => {
+      expect(detectBuildingCodeHeading('Table 10 Maximum size = 600 mm')).toMatchObject({
+        logicalRef: 'Table 10',
+        title: 'Maximum size = 600 mm',
+        nodeType: 'table',
+      });
+    });
   });
 
-  it('maps Docling output into canonical source, nodes, tables, chunks, and references', () => {
-    const index = adaptDoclingToBuildingCodeIndex(parsedDocument(), documentRecord());
+  it('maps parsed document output into canonical source, nodes, tables, chunks, and references', () => {
+    const index = adaptParserDocumentToBuildingCodeIndex(parsedDocument(), documentRecord());
 
     expect(index.sources).toHaveLength(1);
     expect(index.sources[0]).toMatchObject({
@@ -239,53 +252,8 @@ describe('building-code canonical adapter', () => {
     expect(index.chunks.length).toBeGreaterThan(0);
   });
 
-  it('ingests legacy Docling parsed payloads without parser-neutral page diagnostics', () => {
-    const legacyParsed = {
-      parserName: 'docling',
-      parserVersion: '2.0.0',
-      pages: [{ pageNumber: 1, text: 'Section 9.10.3.1 Fire separations\nBody text.' }],
-      elements: [
-        {
-          elementId: 'h1',
-          kind: 'heading',
-          text: 'Section 9.10.3.1 Fire separations',
-          pageNumber: 1,
-          level: 2,
-          confidence: 0.99,
-          bbox: null,
-        },
-        {
-          elementId: 'p1',
-          kind: 'text',
-          text: 'Body text.',
-          pageNumber: 1,
-          level: null,
-          confidence: 0.99,
-          bbox: null,
-        },
-      ],
-      tables: [],
-      diagnostics: [],
-    };
-
-    const index = ingestParsedBuildingCodeDocument(
-      legacyParsed as unknown as NormalizedParserDocument,
-      documentRecord()
-    );
-
-    expect(index.nodes).toHaveLength(1);
-    expect(index.nodes[0]).toMatchObject({
-      logicalRef: 'Section 9.10.3.1',
-      parser: {
-        name: 'docling',
-        version: '2.0.0',
-        sourceElementIds: ['h1', 'p1'],
-      },
-    });
-  });
-
   it('associates structured tables to caption-derived table nodes instead of the current section', () => {
-    const index = adaptDoclingToBuildingCodeIndex(
+    const index = adaptParserDocumentToBuildingCodeIndex(
       {
         ...parsedDocument(),
         elements: [
@@ -337,8 +305,155 @@ describe('building-code canonical adapter', () => {
     expect(tableNode?.tableId).toBe(table?.tableId);
   });
 
+  it('merges repeated multi-page table captions into one table node and one structured table', () => {
+    const index = adaptParserDocumentToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        pages: [
+          {
+            pageNumber: 1,
+            text: 'Section 9.10.3.1 Fire separations\nTable 10 Door ratings\nType | Rating\nSuite door | 45 min',
+            extractionMode: 'native',
+            boundingBoxes: [],
+          },
+          {
+            pageNumber: 2,
+            text: 'Table 10 Door ratings\nType | Rating\nDwelling entry door | 20 min\nNote 1: Continued from page 1.',
+            extractionMode: 'native',
+            boundingBoxes: [],
+          },
+        ],
+        elements: [
+          {
+            elementId: 'section-heading',
+            kind: 'heading',
+            text: 'Section 9.10.3.1 Fire separations',
+            pageNumber: 1,
+            level: 2,
+            confidence: 0.98,
+            bbox: null,
+            sourceIds: ['section-heading'],
+          },
+          {
+            elementId: 'table-caption-1',
+            kind: 'table',
+            text: 'Table 10 Door ratings',
+            pageNumber: 1,
+            level: null,
+            confidence: 0.96,
+            bbox: null,
+            sourceIds: ['table-caption-1'],
+          },
+          {
+            elementId: 'table-caption-2',
+            kind: 'table',
+            text: 'Table 10 Door ratings',
+            pageNumber: 2,
+            level: null,
+            confidence: 0.95,
+            bbox: null,
+            sourceIds: ['table-caption-2'],
+          },
+        ],
+        tables: [
+          {
+            elementId: 'table-caption-1',
+            caption: 'Table 10 Door ratings',
+            pageNumber: 1,
+            columns: ['Type', 'Rating'],
+            rows: [['Suite door', '45 min']],
+            notes: [],
+            confidence: 0.96,
+            sourceIds: ['table-caption-1'],
+          },
+          {
+            elementId: 'table-caption-2',
+            caption: 'Table 10 Door ratings',
+            pageNumber: 2,
+            columns: ['Type', 'Rating'],
+            rows: [['Dwelling entry door', '20 min']],
+            notes: ['Note 1: Continued from page 1.'],
+            confidence: 0.95,
+            sourceIds: ['table-caption-2'],
+          },
+        ],
+      },
+      documentRecord()
+    );
+
+    const tableNodes = index.nodes.filter((node) => node.logicalRef === 'Table 10');
+    const table = index.tables.find((record) => record.caption === 'Table 10 Door ratings');
+
+    expect(tableNodes).toHaveLength(1);
+    expect(tableNodes[0]).toMatchObject({
+      pageRange: '1-2',
+      parser: {
+        sourceElementIds: expect.arrayContaining(['table-caption-1', 'table-caption-2']),
+      },
+    });
+    expect(index.tables).toHaveLength(1);
+    expect(table).toMatchObject({
+      nodeId: tableNodes[0]?.nodeId,
+      rows: [
+        expect.objectContaining({ cells: ['Suite door', '45 min'] }),
+        expect.objectContaining({ cells: ['Dwelling entry door', '20 min'] }),
+      ],
+      notes: [expect.objectContaining({ text: 'Note 1: Continued from page 1.' })],
+    });
+  });
+
+  it('trims repeated structured fragment overlap while preserving distinct repeated rows', () => {
+    const nodes = [tableNode()];
+
+    const tables = buildStructuredTables(
+      nodes,
+      [
+        {
+          elementId: 'lp-table-part-1',
+          caption: 'Table 9.10.3.3 Door Ratings',
+          pageNumber: 2,
+          columns: ['Door', 'Rating'],
+          rows: [
+            ['Suite door', '45 min'],
+            ['Dwelling entry door', '20 min'],
+          ],
+          notes: ['Note 1: Applies to suites.'],
+          confidence: 0.95,
+          sourceIds: ['lp-table-part-1'],
+        },
+        {
+          elementId: 'lp-table-part-2',
+          caption: 'Table 9.10.3.3 Door Ratings',
+          pageNumber: 3,
+          columns: ['Door', 'Rating'],
+          rows: [
+            ['Dwelling entry door', '20 min'],
+            ['Service door', '30 min'],
+            ['Dwelling entry door', '20 min'],
+          ],
+          notes: ['Note 1: Applies to suites.', 'Note 2: See Article 9.10.3.4.'],
+          confidence: 0.94,
+          sourceIds: ['lp-table-part-2'],
+        },
+      ],
+      sourceRecord()
+    );
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].rows.map((row) => row.cells)).toEqual([
+      ['Suite door', '45 min'],
+      ['Dwelling entry door', '20 min'],
+      ['Service door', '30 min'],
+      ['Dwelling entry door', '20 min'],
+    ]);
+    expect(tables[0].notes.map((note) => note.text)).toEqual([
+      'Note 1: Applies to suites.',
+      'Note 2: See Article 9.10.3.4.',
+    ]);
+  });
+
   it('keeps structured tables and extracts markdown tables for unmatched table nodes', () => {
-    const index = adaptDoclingToBuildingCodeIndex(
+    const index = adaptParserDocumentToBuildingCodeIndex(
       {
         ...parsedDocument(),
         elements: [
@@ -486,11 +601,39 @@ describe('building-code canonical adapter', () => {
     expect(nodes[0].tableId).toBe(tables[0].tableId);
   });
 
-  it('uses the parsed Docling parser version for node provenance', () => {
-    const index = adaptDoclingToBuildingCodeIndex(
+  it('ignores caption-only false-positive table nodes without structured content', () => {
+    const index = adaptParserDocumentToBuildingCodeIndex(
       {
         ...parsedDocument(),
-        parserVersion: '2.1.4-docling',
+        elements: [
+          parsedDocument().elements[0],
+          {
+            elementId: 'table-caption-only',
+            kind: 'heading',
+            text: 'Table 12',
+            pageNumber: 2,
+            level: null,
+            confidence: 0.95,
+            bbox: null,
+            sourceIds: ['table-caption-only'],
+          },
+        ],
+        tables: [],
+      },
+      documentRecord()
+    );
+
+    expect(index.nodes.find((node) => node.logicalRef === 'Table 12')).toMatchObject({
+      nodeType: 'table',
+    });
+    expect(index.tables.some((table) => table.nodeId === index.nodes.find((node) => node.logicalRef === 'Table 12')?.nodeId)).toBe(false);
+  });
+
+  it('uses the parsed parser version for node provenance', () => {
+    const index = adaptParserDocumentToBuildingCodeIndex(
+      {
+        ...parsedDocument(),
+        parserVersion: '2.1.4-fixture',
       },
       {
         ...documentRecord(),
@@ -499,8 +642,8 @@ describe('building-code canonical adapter', () => {
     );
 
     expect(index.nodes.map((node) => node.parser.version)).toEqual([
-      '2.1.4-docling',
-      '2.1.4-docling',
+      '2.1.4-fixture',
+      '2.1.4-fixture',
     ]);
   });
 
@@ -553,7 +696,7 @@ describe('building-code canonical adapter', () => {
 
     const index = adaptParserDocumentToBuildingCodeIndex(parsed, {
       ...documentRecord(),
-      parserName: 'docling',
+      parserName: 'legacy',
       parserVersion: 'queued-record-version',
     });
 
@@ -614,7 +757,7 @@ describe('building-code canonical adapter', () => {
   });
 
   it('preserves bounding boxes from content elements attached to the current node', () => {
-    const index = adaptDoclingToBuildingCodeIndex(
+    const index = adaptParserDocumentToBuildingCodeIndex(
       {
         ...parsedDocument(),
         elements: [
@@ -638,8 +781,8 @@ describe('building-code canonical adapter', () => {
     });
   });
 
-  it('preserves the Docling table bbox on caption-created table nodes', () => {
-    const index = adaptDoclingToBuildingCodeIndex(
+  it('preserves the table bbox on caption-created table nodes', () => {
+    const index = adaptParserDocumentToBuildingCodeIndex(
       {
         ...parsedDocument(),
         elements: [
@@ -684,7 +827,7 @@ describe('building-code canonical adapter', () => {
   });
 
   it('reflects the lowest confidence from content elements attached to the current node', () => {
-    const index = adaptDoclingToBuildingCodeIndex(
+    const index = adaptParserDocumentToBuildingCodeIndex(
       {
         ...parsedDocument(),
         elements: [
@@ -704,7 +847,7 @@ describe('building-code canonical adapter', () => {
 
   it('fails documents with no canonical building-code headings', () => {
     expect(() =>
-      adaptDoclingToBuildingCodeIndex(
+      adaptParserDocumentToBuildingCodeIndex(
         {
           ...parsedDocument(),
           elements: [
@@ -719,7 +862,7 @@ describe('building-code canonical adapter', () => {
 
   it('fails table-only documents with no structural building-code headings', () => {
     expect(() =>
-      adaptDoclingToBuildingCodeIndex(
+      adaptParserDocumentToBuildingCodeIndex(
         {
           ...parsedDocument(),
           pages: [

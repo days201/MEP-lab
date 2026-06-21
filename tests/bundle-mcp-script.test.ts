@@ -7,11 +7,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 const { stageBundledServers } = require('../scripts/bundle-mcp.js');
 
 const tempRoots: string[] = [];
-const bridgeSourcePath = path.join(
-  process.cwd(),
-  'src/main/mcp/building-code/docling_bridge.py'
-);
-
 describe('bundle-mcp staging', () => {
   afterEach(() => {
     while (tempRoots.length > 0) {
@@ -55,11 +50,7 @@ describe('bundle-mcp staging', () => {
       fs.readFileSync(path.join(stagedDir, 'software-dev-server-example.js'), 'utf8')
     ).toContain('dev');
 
-    const stagedBridgePath = path.join(stagedDir, 'building-code', 'docling_bridge.py');
-    expect(fs.existsSync(stagedBridgePath)).toBe(true);
-    expect(fs.readFileSync(stagedBridgePath, 'utf8')).toBe(
-      fs.readFileSync(bridgeSourcePath, 'utf8')
-    );
+    expect(fs.existsSync(path.join(stagedDir, 'building-code'))).toBe(false);
 
     const tempEntries = fs
       .readdirSync(path.dirname(stagedDir))
@@ -67,7 +58,7 @@ describe('bundle-mcp staging', () => {
     expect(tempEntries).toEqual([]);
   });
 
-  it('does not stage the Docling bridge when the building-code server is omitted', async () => {
+  it('does not stage a building-code sidecar directory when the building-code server is omitted', async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cowork-bundle-mcp-'));
     tempRoots.push(tempRoot);
 
@@ -79,7 +70,7 @@ describe('bundle-mcp staging', () => {
 
     await stageBundledServers(sourceDir, stagedDir, [{ name: 'gui-operate-server' }]);
 
-    expect(fs.existsSync(path.join(stagedDir, 'building-code', 'docling_bridge.py'))).toBe(false);
+    expect(fs.existsSync(path.join(stagedDir, 'building-code'))).toBe(false);
   });
 
   it('points electron-builder extraResources at the staged MCP directory', () => {
@@ -99,10 +90,9 @@ describe('bundle-mcp staging', () => {
     expect(bundleScript).toContain("entry: 'building-code-server.ts'");
   });
 
-  it('knows to stage the Docling bridge beside bundled MCP assets', () => {
+  it('does not stage a Docling bridge beside bundled MCP assets', () => {
     const bundleScript = fs.readFileSync(path.join(process.cwd(), 'scripts/bundle-mcp.js'), 'utf8');
-    expect(bundleScript).toContain('docling_bridge.py');
-    expect(bundleScript).toContain('building-code');
+    expect(bundleScript).not.toContain('docling_bridge.py');
   });
 
   it('requires building-code MCP artifacts in default bundle output for release packaging', () => {
@@ -110,7 +100,7 @@ describe('bundle-mcp staging', () => {
     const builderConfig = fs.readFileSync(path.resolve(process.cwd(), 'electron-builder.yml'), 'utf8');
 
     expect(bundleScript).toMatch(/name:\s*'building-code-server'/);
-    expect(bundleScript).toContain('docling_bridge.py');
+    expect(bundleScript).not.toContain('docling_bridge.py');
     expect(builderConfig).toContain('.bundle-resources/mcp');
     expect(builderConfig).toMatch(/to:\s*mcp/);
   });

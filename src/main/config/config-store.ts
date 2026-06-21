@@ -30,6 +30,7 @@ import {
   shouldUseAnthropicAuthToken,
 } from './auth-utils';
 import { API_PROVIDER_PRESETS, PI_AI_CURATED_PRESETS } from '../../shared/api-model-presets';
+import { resolveEmbeddingRuntimeConfig } from './embedding-runtime-config';
 
 /**
  * Application configuration schema
@@ -55,10 +56,34 @@ export interface CreateConfigSetPayload {
   fromSetId?: string;
 }
 
+export interface AgentModelConfig {
+  id: string;
+  label?: string;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+}
+
+export interface EmbeddingRuntimeConfig {
+  enabled: boolean;
+  provider: ProviderType;
+  customProtocol?: CustomProtocolType;
+  apiKey?: string;
+  baseUrl?: string;
+  modelId: string;
+  dimensions?: number;
+  timeoutMs?: number;
+}
+
+export interface MemoryLlmMode {
+  mode: 'disabled' | 'use-agent-model' | 'use-specific-agent-model';
+  selectedModelId?: string;
+}
+
 export interface ProviderProfile {
   apiKey: string;
   baseUrl?: string;
   model: string;
+  models?: AgentModelConfig[];
   contextWindow?: number;
   maxTokens?: number;
 }
@@ -71,6 +96,7 @@ export interface ApiConfigSet {
   customProtocol: CustomProtocolType;
   activeProfileKey: ProviderProfileKey;
   profiles: Partial<Record<ProviderProfileKey, ProviderProfile>>;
+  embedding?: EmbeddingRuntimeConfig;
   enableThinking: boolean;
   updatedAt: string;
 }
@@ -139,8 +165,9 @@ export interface MemoryModelRuntimeConfig {
 }
 
 export interface MemoryRuntimeConfig {
-  llm: MemoryModelRuntimeConfig;
-  embedding: MemoryModelRuntimeConfig;
+  llm: MemoryLlmMode | MemoryModelRuntimeConfig;
+  /** @deprecated Legacy field — migrated to ApiConfigSet.embedding on load */
+  embedding?: MemoryModelRuntimeConfig;
   useEmbedding: boolean;
   maxNavSteps: number;
   ingestionConcurrency: number;
@@ -247,22 +274,7 @@ const defaultConfig: AppConfig = {
   memoryEnabled: true,
   memoryRuntime: {
     llm: {
-      inheritFromActive: true,
-      provider: undefined,
-      customProtocol: undefined,
-      apiKey: '',
-      baseUrl: '',
-      model: '',
-      timeoutMs: 180000,
-    },
-    embedding: {
-      inheritFromActive: true,
-      provider: undefined,
-      customProtocol: undefined,
-      apiKey: '',
-      baseUrl: '',
-      model: 'text-embedding-3-small',
-      timeoutMs: 180000,
+      mode: 'use-agent-model',
     },
     useEmbedding: false,
     maxNavSteps: 2,
@@ -369,6 +381,162 @@ function isMemoryModelRuntimeConfig(value: unknown): value is Partial<MemoryMode
   return typeof value === 'object' && value !== null;
 }
 
+function isMemoryLlmMode(value: unknown): value is Partial<MemoryLlmMode> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isEmbeddingRuntimeConfig(value: unknown): value is Partial<EmbeddingRuntimeConfig> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isAgentModelConfig(value: unknown): value is Partial<AgentModelConfig> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeAgentModels(profile: Partial<ProviderProfile> | undefined): AgentModelConfig[] {
+  const rawModels = profile?.models;
+  if (Array.isArray(rawModels) && rawModels.length > 0) {
+    const normalized: AgentModelConfig[] = [];
+    for (const entry of rawModels) {
+      if (!isAgentModelConfig(entry)) continue;
+      const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+      if (!id) continue;
+      const modelEntry: AgentModelConfig = { id };
+      if (typeof entry.label === 'string' && entry.label.trim()) {
+        modelEntry.label = entry.label.trim();
+      }
+      if (typeof entry.contextWindow === 'number' && entry.contextWindow > 0) {
+        modelEntry.contextWindow = entry.contextWindow;
+      }
+      const maxOut =
+        typeof entry.maxOutputTokens === 'number' && entry.maxOutputTokens > 0
+          ? entry.maxOutputTokens
+          : undefined;
+      if (maxOut) {
+        modelEntry.maxOutputTokens = maxOut;
+      }
+      normalized.push(modelEntry);
+    }
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+
+  const model = typeof profile?.model === 'string' ? profile.model.trim() : '';
+  if (!model) {
+    return [];
+  }
+  const fallback: AgentModelConfig = { id: model };
+  if (typeof profile?.contextWindow === 'number' && profile.contextWindow > 0) {
+    fallback.contextWindow = profile.contextWindow;
+  }
+  if (typeof profile?.maxTokens === 'number' && profile.maxTokens > 0) {
+    fallback.maxOutputTokens = profile.maxTokens;
+  }
+  return [fallback];
+}
+
+function normalizeEmbeddingRuntimeConfig(
+  raw: unknown,
+  fallback: EmbeddingRuntimeConfig | undefined,
+  legacy?: MemoryModelRuntimeConfig
+): EmbeddingRuntimeConfig | undefined {
+  const value = isEmbeddingRuntimeConfig(raw) ? raw : undefined;
+  if (!value && !legacy) {
+    return fallback;
+  }
+
+  if (legacy && !value) {
+    if (legacy.inheritFromActive) {
+      return {
+        enabled: true,
+        provider: 'openai',
+        modelId: legacy.model?.trim() || 'text-embedding-3-small',
+        timeoutMs: legacy.timeoutMs,
+      };
+    }
+    if (legacy.provider) {
+      return {
+        enabled: true,
+        provider: legacy.provider,
+        customProtocol: legacy.customProtocol,
+        apiKey: legacy.apiKey,
+        baseUrl: legacy.baseUrl,
+        modelId: legacy.model?.trim() || 'text-embedding-3-small',
+        timeoutMs: legacy.timeoutMs,
+      };
+    }
+  }
+
+  if (!value) {
+    return fallback;
+  }
+
+  const provider = isProviderType(value.provider)
+    ? value.provider
+    : fallback?.provider || 'openai';
+  return {
+    enabled: toBoolean(value.enabled, fallback?.enabled ?? false),
+    provider,
+    customProtocol: isCustomProtocol(value.customProtocol)
+      ? value.customProtocol
+      : fallback?.customProtocol,
+    apiKey: typeof value.apiKey === 'string' ? value.apiKey : fallback?.apiKey,
+    baseUrl: typeof value.baseUrl === 'string' ? value.baseUrl : fallback?.baseUrl,
+    modelId:
+      typeof value.modelId === 'string' && value.modelId.trim()
+        ? value.modelId.trim()
+        : fallback?.modelId || 'text-embedding-3-small',
+    dimensions:
+      typeof value.dimensions === 'number' && Number.isFinite(value.dimensions) && value.dimensions > 0
+        ? Math.round(value.dimensions)
+        : fallback?.dimensions,
+    timeoutMs:
+      typeof value.timeoutMs === 'number' && Number.isFinite(value.timeoutMs)
+        ? Math.max(5000, Math.round(value.timeoutMs))
+        : fallback?.timeoutMs,
+  };
+}
+
+function migrateMemoryLlmMode(raw: unknown): MemoryLlmMode {
+  if (isMemoryLlmMode(raw)) {
+    const mode = raw.mode;
+    if (
+      mode === 'disabled' ||
+      mode === 'use-agent-model' ||
+      mode === 'use-specific-agent-model'
+    ) {
+      return {
+        mode,
+        selectedModelId:
+          typeof raw.selectedModelId === 'string' && raw.selectedModelId.trim()
+            ? raw.selectedModelId.trim()
+            : undefined,
+      };
+    }
+  }
+
+  const legacy = normalizeMemoryModelRuntimeConfig(
+    raw,
+    {
+      inheritFromActive: true,
+      apiKey: '',
+      baseUrl: '',
+      model: '',
+      timeoutMs: 180000,
+    }
+  );
+
+  if (legacy.inheritFromActive) {
+    return { mode: 'use-agent-model' };
+  }
+
+  return {
+    mode: 'use-specific-agent-model',
+    selectedModelId: legacy.model?.trim() || undefined,
+  };
+}
+
 function normalizeMemoryModelRuntimeConfig(
   raw: unknown,
   fallback: MemoryModelRuntimeConfig
@@ -393,12 +561,22 @@ function normalizeMemoryModelRuntimeConfig(
 function normalizeMemoryRuntimeConfig(raw: unknown): MemoryRuntimeConfig {
   const value =
     typeof raw === 'object' && raw !== null ? (raw as Partial<MemoryRuntimeConfig>) : {};
+  const legacyEmbedding = value.embedding
+    ? normalizeMemoryModelRuntimeConfig(
+        value.embedding,
+        {
+          inheritFromActive: true,
+          apiKey: '',
+          baseUrl: '',
+          model: 'text-embedding-3-small',
+          timeoutMs: 180000,
+        }
+      )
+    : undefined;
+
   return {
-    llm: normalizeMemoryModelRuntimeConfig(value.llm, defaultConfig.memoryRuntime.llm),
-    embedding: normalizeMemoryModelRuntimeConfig(
-      value.embedding,
-      defaultConfig.memoryRuntime.embedding
-    ),
+    llm: migrateMemoryLlmMode(value.llm),
+    embedding: legacyEmbedding,
     useEmbedding: toBoolean(value.useEmbedding, defaultConfig.memoryRuntime.useEmbedding),
     maxNavSteps:
       typeof value.maxNavSteps === 'number' && Number.isFinite(value.maxNavSteps)
@@ -596,27 +774,36 @@ export class ConfigStore {
     profile: Partial<ProviderProfile> | undefined
   ): ProviderProfile {
     const fallback = this.getDefaultProfile(profileKey);
-    const model =
-      typeof profile?.model === 'string' && profile.model.trim()
-        ? profile.model.trim()
-        : fallback.model;
     const rawBaseUrl =
       typeof profile?.baseUrl === 'string' && profile.baseUrl.trim()
         ? profile.baseUrl.trim()
         : fallback.baseUrl;
     const baseUrl =
       profileKey === 'ollama' ? normalizeOllamaBaseUrl(rawBaseUrl) || fallback.baseUrl : rawBaseUrl;
+    const models = normalizeAgentModels(profile);
+    const selectedModel =
+      typeof profile?.model === 'string' && profile.model.trim()
+        ? profile.model.trim()
+        : models[0]?.id || fallback.model;
+    const selectedEntry =
+      models.find((entry) => entry.id === selectedModel) || models[0];
     const result: ProviderProfile = {
       apiKey: typeof profile?.apiKey === 'string' ? profile.apiKey : '',
       baseUrl,
-      model,
+      model: selectedModel,
     };
-    // Preserve optional numeric fields so callers don't silently lose user-set values
-    if (typeof profile?.contextWindow === 'number' && profile.contextWindow > 0) {
-      result.contextWindow = profile.contextWindow;
+    if (models.length > 0) {
+      result.models = models;
     }
-    if (typeof profile?.maxTokens === 'number' && profile.maxTokens > 0) {
-      result.maxTokens = profile.maxTokens;
+    // Preserve optional numeric fields so callers don't silently lose user-set values
+    const contextWindow = selectedEntry?.contextWindow ?? profile?.contextWindow;
+    const maxTokens =
+      selectedEntry?.maxOutputTokens ?? profile?.maxTokens;
+    if (typeof contextWindow === 'number' && contextWindow > 0) {
+      result.contextWindow = contextWindow;
+    }
+    if (typeof maxTokens === 'number' && maxTokens > 0) {
+      result.maxTokens = maxTokens;
     }
     return result;
   }
@@ -790,6 +977,7 @@ export class ConfigStore {
       customProtocol,
       activeProfileKey,
       profiles,
+      embedding: normalizeEmbeddingRuntimeConfig(rawSet?.embedding, undefined),
       enableThinking: toBoolean(rawSet?.enableThinking, fallback.enableThinking),
       updatedAt,
     };
@@ -981,13 +1169,33 @@ export class ConfigStore {
       isConfigured: toBoolean(raw.isConfigured, defaultConfig.isConfigured),
     };
     this.normalizeModelIds(result);
+    this.migrateEmbeddingToActiveConfigSet(result);
     return result;
+  }
+
+  private migrateEmbeddingToActiveConfigSet(config: AppConfig): void {
+    const activeSet =
+      config.configSets.find((set) => set.id === config.activeConfigSetId) || config.configSets[0];
+    if (!activeSet || activeSet.embedding) {
+      return;
+    }
+
+    const legacyEmbedding = config.memoryRuntime.embedding;
+    if (!legacyEmbedding) {
+      return;
+    }
+
+    const migrated = normalizeEmbeddingRuntimeConfig(undefined, undefined, legacyEmbedding);
+    if (migrated) {
+      activeSet.embedding = migrated;
+    }
   }
 
   private cloneConfigSet(configSet: ApiConfigSet): ApiConfigSet {
     return {
       ...configSet,
       profiles: this.cloneProfiles(configSet.profiles),
+      embedding: configSet.embedding ? { ...configSet.embedding } : undefined,
       updatedAt: toNonEmptyString(configSet.updatedAt) || nowISO(),
     };
   }
@@ -1541,6 +1749,11 @@ export class ConfigStore {
     delete process.env.GEMINI_BASE_URL;
     delete process.env.CLAUDE_CODE_PATH;
     delete process.env.COWORK_WORKDIR;
+    delete process.env.BUILDING_CODE_EMBEDDING_API_KEY;
+    delete process.env.BUILDING_CODE_EMBEDDING_BASE_URL;
+    delete process.env.BUILDING_CODE_EMBEDDING_MODEL;
+    delete process.env.BUILDING_CODE_EMBEDDING_DIMENSIONS;
+    delete process.env.BUILDING_CODE_EMBEDDING_TIMEOUT_MS;
 
     const useOpenAI =
       projectedConfig.provider === 'openai' ||
@@ -1631,6 +1844,21 @@ export class ConfigStore {
 
     if (projectedConfig.defaultWorkdir) {
       process.env.COWORK_WORKDIR = projectedConfig.defaultWorkdir;
+    }
+
+    const embeddingConfig = resolveEmbeddingRuntimeConfig(config);
+    if (embeddingConfig) {
+      if (embeddingConfig.apiKey) {
+        process.env.BUILDING_CODE_EMBEDDING_API_KEY = embeddingConfig.apiKey;
+      }
+      if (embeddingConfig.baseUrl) {
+        process.env.BUILDING_CODE_EMBEDDING_BASE_URL = embeddingConfig.baseUrl;
+      }
+      process.env.BUILDING_CODE_EMBEDDING_MODEL = embeddingConfig.model;
+      if (embeddingConfig.dimensions) {
+        process.env.BUILDING_CODE_EMBEDDING_DIMENSIONS = String(embeddingConfig.dimensions);
+      }
+      process.env.BUILDING_CODE_EMBEDDING_TIMEOUT_MS = String(embeddingConfig.timeoutMs);
     }
 
     log('[Config] Applied env vars for provider:', projectedConfig.provider, {

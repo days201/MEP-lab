@@ -176,11 +176,25 @@ export type KnowledgeBaseCodeNodeType =
 export type KnowledgeBaseDocumentStatus =
   | 'queued'
   | 'parsing'
+  | 'ocr'
+  | 'canonicalizing'
   | 'embedding'
   | 'ready'
   | 'ready_with_warnings'
   | 'failed'
+  | 'interrupted'
   | 'removed';
+
+export type KnowledgeBaseParserName = 'legacy' | 'liteparse' | 'fixture';
+
+export interface KnowledgeBaseParseProgress {
+  phase: 'queued' | 'parsing' | 'ocr' | 'canonicalizing' | 'embedding';
+  message: string;
+  currentPage: number | null;
+  totalPages: number | null;
+  ocrPageCount: number;
+  updatedAt: string;
+}
 
 export interface KnowledgeBaseDocumentMetadata {
   codeFamily: string;
@@ -197,7 +211,7 @@ export interface KnowledgeBaseDocumentRecord {
   sourceChecksum: string;
   sourcePath: string;
   sourceUri: string;
-  parserName: 'docling';
+  parserName: KnowledgeBaseParserName;
   parserVersion: string;
   status: KnowledgeBaseDocumentStatus;
   uploadedAt: string;
@@ -207,6 +221,7 @@ export interface KnowledgeBaseDocumentRecord {
   metadata: KnowledgeBaseDocumentMetadata;
   diagnostics: KnowledgeBaseDiagnostic[];
   failureMessage: string | null;
+  progress: KnowledgeBaseParseProgress | null;
   indexSummary: KnowledgeBaseIndexSummary;
 }
 
@@ -244,10 +259,17 @@ export interface KnowledgeBaseGraphSummary {
   tableCount: number;
   referenceEdgeCount: number;
   unresolvedReferenceCount: number;
-  nodes: Array<{ nodeId: string; logicalRef: string; title: string; nodeType: KnowledgeBaseCodeNodeType }>;
+  nodes: Array<{
+    nodeId: string;
+    documentId: string;
+    logicalRef: string;
+    title: string;
+    nodeType: KnowledgeBaseCodeNodeType;
+  }>;
   edges: Array<{
     fromNodeId: string;
     targetNodeId: string | null;
+    targetLogicalRef: string;
     rawText: string;
     status: 'resolved' | 'unresolved';
   }>;

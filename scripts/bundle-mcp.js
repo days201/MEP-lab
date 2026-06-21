@@ -302,13 +302,6 @@ async function stageBundledServers(
       await copyFileWithRetries(path.join(sourceDir, filename), path.join(tempDir, filename));
     }
 
-    if (serverList.some((server) => server.name === 'building-code-server')) {
-      const bridgeSource = path.join(SRC_MCP_DIR, 'building-code', 'docling_bridge.py');
-      const bridgeDestinationDir = path.join(tempDir, 'building-code');
-      fs.mkdirSync(bridgeDestinationDir, { recursive: true });
-      await copyFileWithRetries(bridgeSource, path.join(bridgeDestinationDir, 'docling_bridge.py'));
-    }
-
     await replaceDirectoryWithRetries(tempDir, stagedDir);
     console.log(`[bundle:mcp] Staged bundled MCP servers at ${path.relative(PROJECT_ROOT, stagedDir)}`);
   } catch (error) {

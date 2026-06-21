@@ -11,6 +11,7 @@ import {
   type ParserExtractionMode,
   type ParserPageDiagnostic,
 } from './parser-adapter';
+import { detectBuildingCodeHeading } from './heading-detector';
 import {
   hasExpectedCodePattern,
   scorePageExtractionQuality,
@@ -757,7 +758,8 @@ function classifyElementKind(text: string): NormalizedParserElement['kind'] {
   if (isTableText(text)) {
     return 'table';
   }
-  if (/^(?:Section|Subsection|Article|Sentence|Part|Chapter|Appendix|Note)\s+/i.test(text)) {
+
+  if (detectBuildingCodeHeading(text)?.nodeType !== 'table' && isHeadingText(text)) {
     return 'heading';
   }
 
@@ -765,7 +767,29 @@ function classifyElementKind(text: string): NormalizedParserElement['kind'] {
 }
 
 function isTableText(text: string): boolean {
-  return /^Table\s+/i.test(text) || text.includes('|');
+  const heading = detectBuildingCodeHeading(text);
+  if (heading?.nodeType === 'table') {
+    return true;
+  }
+
+  return isTableRowText(text);
+}
+
+function isHeadingText(text: string): boolean {
+  return /^(?:Section|Subsection|Article|Sentence|Part|Chapter|Appendix|Note)\s+/i.test(text);
+}
+
+function isTableRowText(text: string): boolean {
+  if (!text.includes('|')) {
+    return false;
+  }
+
+  const cells = text
+    .split('|')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return cells.length >= 2;
 }
 
 function headingLevel(text: string): number {

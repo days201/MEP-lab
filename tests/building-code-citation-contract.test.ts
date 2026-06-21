@@ -343,7 +343,7 @@ describe('building-code citation contract', () => {
       childNodeIds: [],
       extractionConfidence: 0.97,
       parser: {
-        name: 'docling',
+        name: 'legacy',
         version: '2.0.0',
         sourceElementIds: ['page-12-block-3'],
         pageRange: '12-13',
@@ -361,7 +361,7 @@ describe('building-code citation contract', () => {
     expect(citation.pageRange).toBe('12-13');
     expect(citation.extractionConfidence).toBe(0.97);
     expect(citation.parser).toEqual({
-      name: 'docling',
+      name: 'legacy',
       version: '2.0.0',
       sourceElementIds: ['page-12-block-3'],
       pageRange: '12-13',

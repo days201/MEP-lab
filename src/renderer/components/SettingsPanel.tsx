@@ -74,6 +74,7 @@ export function SettingsPanel({ onClose, initialTab = 'api' }: SettingsPanelProp
   // Read settingsTab from store at mount time so external navigation (nav-server)
   // takes effect even before this component mounts.
   const storeTab = useAppStore((s) => s.settingsTab);
+  const settingsSection = useAppStore((s) => s.settingsSection);
   const setSettingsTab = useAppStore((s) => s.setSettingsTab);
   const resolvedInitial =
     storeTab && VALID_TABS.has(storeTab as TabId) ? (storeTab as TabId) : initialTab;
@@ -263,7 +264,7 @@ export function SettingsPanel({ onClose, initialTab = 'api' }: SettingsPanelProp
               <div className={activeTab === 'api' ? '' : 'hidden'}>
                 {viewedTabs.has('api') && (
                   <>
-                    <SettingsAPI />
+                    <SettingsAPI initialSection={settingsSection ?? undefined} />
                   </>
                 )}
               </div>
@@ -282,7 +283,9 @@ export function SettingsPanel({ onClose, initialTab = 'api' }: SettingsPanelProp
                 {viewedTabs.has('memory') && <SettingsMemory />}
               </div>
               <div className={activeTab === 'knowledgeBase' ? '' : 'hidden'}>
-                {viewedTabs.has('knowledgeBase') && <SettingsKnowledgeBase />}
+                {viewedTabs.has('knowledgeBase') && (
+                  <SettingsKnowledgeBase isActive={activeTab === 'knowledgeBase'} />
+                )}
               </div>
               <div className={activeTab === 'schedule' ? '' : 'hidden'}>
                 {viewedTabs.has('schedule') && (

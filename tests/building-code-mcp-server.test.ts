@@ -48,7 +48,7 @@ function persistedIndex(): BuildingCodeIndex {
         childNodeIds: [],
         extractionConfidence: 1,
         parser: {
-          name: 'docling',
+          name: 'legacy',
           version: '2.0.0',
           sourceElementIds: ['h1'],
           pageRange: '4',

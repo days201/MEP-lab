@@ -1,9 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const runPiAiOneShotMock = vi.hoisted(() => vi.fn());
+const embeddingsCreateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../main/claude/claude-sdk-one-shot', () => ({
   runPiAiOneShot: runPiAiOneShotMock,
+}));
+
+vi.mock('openai', () => ({
+  default: class MockOpenAI {
+    embeddings = {
+      create: embeddingsCreateMock,
+    };
+  },
 }));
 
 import type { AppConfig } from '../../main/config/config-store';
@@ -61,6 +70,7 @@ describe('MemoryLLMClient', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     runPiAiOneShotMock.mockReset();
+    embeddingsCreateMock.mockReset();
   });
 
   afterEach(() => {
@@ -93,5 +103,46 @@ describe('MemoryLLMClient', () => {
     const error = await completion;
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe('Memory LLM request timed out after 5000ms');
+  });
+
+  it('passes effective Gemini embedding dimensions to the OpenAI-compatible embedding client', async () => {
+    embeddingsCreateMock.mockResolvedValue({
+      data: [{ embedding: [0.1, 0.2, 0.3] }],
+    });
+    const config = makeConfig(5000);
+    config.provider = 'openrouter';
+    config.customProtocol = 'openai';
+    config.apiKey = 'sk-or-v1-agent';
+    config.baseUrl = 'https://openrouter.ai/api/v1';
+    config.activeProfileKey = 'openrouter';
+    config.memoryRuntime.useEmbedding = true;
+    config.configSets = [
+      {
+        id: 'default',
+        name: 'Default',
+        provider: 'openrouter',
+        customProtocol: 'openai',
+        activeProfileKey: 'openrouter',
+        profiles: {},
+        embedding: {
+          enabled: true,
+          provider: 'openrouter',
+          modelId: 'google/gemini-embedding-2',
+          apiKey: 'sk-or-v1-embedding',
+          baseUrl: 'https://openrouter.ai/api/v1',
+        },
+        enableThinking: false,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const client = new MemoryLLMClient(() => config);
+    await expect(client.embed('  refrigerant query  ')).resolves.toEqual([0.1, 0.2, 0.3]);
+
+    expect(embeddingsCreateMock).toHaveBeenCalledWith({
+      model: 'google/gemini-embedding-2',
+      input: 'refrigerant query',
+      dimensions: 768,
+    });
   });
 });

@@ -8,7 +8,6 @@
  * - Preinstall required packages into `resources/python/darwin-{arch}/site-packages/`
  *   - Pillow (PIL)
  *   - pyobjc-framework-Quartz (import Quartz)
- *   - Docling for Knowledge Base document parsing
  *
  * Runtime code (gui-operate-server) will prefer the bundled Python and add
  * `${pythonRoot}/site-packages` to PYTHONPATH.
@@ -43,7 +42,6 @@ const RUNTIME_VERSION_FILENAME = 'runtime-version.txt';
 const BUNDLED_PYTHON_PACKAGES = [
   'pillow',
   'pyobjc-framework-Quartz',
-  'docling',
 ];
 const BUNDLED_RUNTIME_FINGERPRINT = BUNDLED_PYTHON_PACKAGES.join('|');
 // Use the correct GitHub API endpoint (v3, no trailing slash)
@@ -371,8 +369,7 @@ function installPackages(siteDir, platformTag, pythonBin, platform) {
   // Avoid re-install if already present
   const hasPillow = exists(path.join(siteDir, 'PIL'));
   const hasQuartz = platform === 'win32' ? true : exists(path.join(siteDir, 'Quartz'));
-  const hasDocling = exists(path.join(siteDir, 'docling'));
-  if (hasPillow && hasQuartz && hasDocling && runtimeMarker === runtimeFingerprint) {
+  if (hasPillow && hasQuartz && runtimeMarker === runtimeFingerprint) {
     console.log(`✓ Python packages already present in ${siteDir}`);
     return;
   }
@@ -381,7 +378,6 @@ function installPackages(siteDir, platformTag, pythonBin, platform) {
   ensurePipAvailable(pipPython);
 
   // Install wheels into a target directory (no need to run the bundled python).
-  // Pip surfaces missing Docling binary wheels as a hard build failure.
   // NOTE: requires network access and a working pip on the build machine.
   const cmd =
     `${JSON.stringify(pipPython)} -m pip install --upgrade --no-input --only-binary=:all: ` +
@@ -398,15 +394,12 @@ function installPackages(siteDir, platformTag, pythonBin, platform) {
  *
  * python-build-standalone ships a full Python with many pre-installed packages
  * (litellm, google-cloud, grpc, etc.) that we don't need. We only keep the
- * packages required for GUI automation (PIL, pyobjc/Quartz) and Knowledge Base
- * parsing (Docling and its dependencies).
+ * packages required for GUI automation (PIL and pyobjc/Quartz).
  */
 function cleanPythonRuntime(destDir, siteDir) {
   console.log(`🧹 Cleaning Python runtime to reduce bundle size...`);
 
   // --- 1. Clean site-packages: keep only bundled runtime packages ---
-  // Docling brings a sizeable dependency tree that changes over time, so avoid
-  // pruning site-packages after pip has built the deterministic target set.
   if (exists(resolveRuntimeVersionFile(destDir))) {
     console.log(`  ✓ site-packages: preserving bundled runtime packages`);
   } else {

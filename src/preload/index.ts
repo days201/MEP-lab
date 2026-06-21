@@ -452,6 +452,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('knowledgeBase.uploadDocuments', filePaths),
     reparseDocument: (documentId: string): Promise<KnowledgeBaseOverview> =>
       ipcRenderer.invoke('knowledgeBase.reparseDocument', documentId),
+    rebuildEmbeddings: (): Promise<KnowledgeBaseOverview> =>
+      ipcRenderer.invoke('knowledgeBase.rebuildEmbeddings'),
     removeDocument: (documentId: string): Promise<KnowledgeBaseOverview> =>
       ipcRenderer.invoke('knowledgeBase.removeDocument', documentId),
     revealSource: (documentId: string): Promise<{ success: boolean; error?: string }> =>
@@ -699,6 +701,7 @@ declare global {
         getDroppedFilePaths: (files: File[]) => string[];
         uploadDocuments: (filePaths: string[]) => Promise<KnowledgeBaseOverview>;
         reparseDocument: (documentId: string) => Promise<KnowledgeBaseOverview>;
+        rebuildEmbeddings: () => Promise<KnowledgeBaseOverview>;
         removeDocument: (documentId: string) => Promise<KnowledgeBaseOverview>;
         revealSource: (documentId: string) => Promise<{ success: boolean; error?: string }>;
       };

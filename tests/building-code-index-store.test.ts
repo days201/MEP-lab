@@ -480,8 +480,8 @@ describe('building-code index store', () => {
                   pageRange: '12',
                   headingPath: ['NBC 2025', 'Table 6.2.1.1 LiteParse table'],
                   extractionConfidence: 0.93,
-                  parser: {
-                    name: 'docling',
+                parser: {
+                    name: 'legacy',
                     version: 'missing-fields',
                   },
                   displayCitation: 'NBC 2025, Table 6.2.1.1, Row 1',
@@ -524,6 +524,124 @@ describe('building-code index store', () => {
 
     expect(loaded.tables[0].rows[0].citation.parser).toEqual(liteParseParser);
     expect(loaded.tables[0].notes[0].citation.parser).toEqual(liteParseParser);
+  });
+
+  it('migrates persisted Docling provenance to legacy provenance without dropping index data', async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'building-code-index-'));
+    tempRoots.push(tempRoot);
+
+    fs.writeFileSync(
+      path.join(tempRoot, 'index.json'),
+      JSON.stringify({
+        ...minimalIndex(),
+        sources: [
+          {
+            sourceId: 'docling-source-1',
+            documentId: 'docling-doc-1',
+            codeFamily: 'NBC',
+            edition: '2025',
+            jurisdictionScope: 'Canada',
+            sourceTitle: 'Legacy Docling NBC',
+            sourceUrl: 'kb://building-code/docling-doc-1/source.pdf',
+            localSourcePath: 'C:/kb/docling-source.pdf',
+            sourceChecksum: 'sha256:docling',
+          },
+        ],
+        nodes: [
+          {
+            nodeId: 'docling-node-1',
+            sourceId: 'docling-source-1',
+            documentId: 'docling-doc-1',
+            nodeType: 'section',
+            logicalRef: 'Section 9.10.3.1',
+            title: 'Fire separations',
+            text: 'Legacy Docling section text.',
+            pageRange: '12',
+            headingPath: ['NBC 2025', 'Section 9.10.3.1 Fire separations'],
+            parentNodeId: null,
+            childNodeIds: [],
+            extractionConfidence: 0.98,
+            parser: {
+              name: 'docling',
+              version: '2.0.0-docling',
+              sourceElementIds: ['page-12-block-3'],
+              pageRange: '12',
+              boundingBoxes: [{ pageNumber: 12, x: 10, y: 20, width: 30, height: 40 }],
+            },
+          },
+        ],
+        tables: [
+          {
+            tableId: 'docling-table-1',
+            nodeId: 'docling-node-1',
+            caption: 'Legacy table',
+            columns: ['Item', 'Value'],
+            rows: [
+              {
+                rowId: 'docling-row-1',
+                cells: ['A', 'B'],
+                citation: {
+                  status: 'complete',
+                  citationId: 'docling-row-citation',
+                  sourceId: 'docling-source-1',
+                  documentId: 'docling-doc-1',
+                  codeFamily: 'NBC',
+                  edition: '2025',
+                  jurisdictionScope: 'Canada',
+                  sourceTitle: 'Legacy Docling NBC',
+                  sourceUrl: 'kb://building-code/docling-doc-1/source.pdf',
+                  localSourcePath: 'C:/kb/docling-source.pdf',
+                  sourceChecksum: 'sha256:docling',
+                  logicalRef: 'Table 9.10.3.1, Row 1',
+                  nodeType: 'table-row',
+                  pageRange: '12',
+                  headingPath: ['NBC 2025', 'Section 9.10.3.1 Fire separations'],
+                  extractionConfidence: 0.98,
+                  parser: {
+                    name: 'docling',
+                    version: '2.0.0-docling',
+                    sourceElementIds: ['page-12-row-1'],
+                    pageRange: '12',
+                    boundingBoxes: [],
+                  },
+                  displayCitation: 'NBC 2025, Table 9.10.3.1, Row 1',
+                },
+              },
+            ],
+            notes: [],
+          },
+        ],
+        vectors: undefined,
+      })
+    );
+    fs.writeFileSync(path.join(tempRoot, 'vectors.json'), JSON.stringify({ version: 1, vectors: [] }));
+
+    const loaded = await loadBuildingCodeIndex(tempRoot);
+
+    expect(loaded.nodes[0].parser).toEqual({
+      name: 'legacy',
+      version: '2.0.0-docling',
+      sourceElementIds: ['page-12-block-3'],
+      pageRange: '12',
+      boundingBoxes: [{ pageNumber: 12, x: 10, y: 20, width: 30, height: 40 }],
+    });
+    expect(loaded.tables[0].rows[0].citation.parser).toEqual({
+      name: 'legacy',
+      version: '2.0.0-docling',
+      sourceElementIds: ['page-12-row-1'],
+      pageRange: '12',
+      boundingBoxes: [],
+    });
+    expect(() =>
+      assertCitedEvidence({
+        evidenceId: 'legacy-docling-row',
+        nodeId: 'docling-node-1',
+        evidenceKind: 'table-row',
+        excerpt: 'A | B',
+        applicabilityNotes: [],
+        citation: loaded.tables[0].rows[0].citation,
+      })
+    ).not.toThrow();
   });
 
   it('creates an empty active index with semantic search unavailable', async () => {
@@ -578,7 +696,7 @@ describe('building-code index store', () => {
           childNodeIds: [],
           extractionConfidence: 1,
           parser: {
-            name: 'docling',
+            name: 'legacy',
             version: '2.0.0',
             sourceElementIds: ['h1'],
             pageRange: '1',
