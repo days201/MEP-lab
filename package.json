@@ -106,7 +106,7 @@
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
-    "@commitlint/config-conventional": "^20.5.3",
+    "@commitlint/config-conventional": "^21.0.2",
     "@electron/notarize": "^2.5.0",
     "@types/archiver": "^7.0.0",
     "@types/better-sqlite3": "^7.6.12",
