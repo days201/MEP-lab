@@ -66,10 +66,28 @@ interface LiteParseTextItem {
   width?: number;
   height?: number;
   confidence?: number;
+  sourceId?: string;
+}
+
+interface LiteParseLineItem {
+  text: string;
+  sourceIds: string[];
+  bbox: NormalizedParserElement['bbox'];
+  confidence?: number;
 }
 
 const DEFAULT_OCR_PAGE_BUDGET = 64;
-const DEFAULT_LITEPARSE_VERSION = 'unknown';
+const DEFAULT_LITEPARSE_VERSION = installedLiteParsePackageVersion() ?? 'unknown';
+
+function installedLiteParsePackageVersion(): string | null {
+  try {
+    const require = createRequire(import.meta.url);
+    const packageJson = require('@llamaindex/liteparse/package.json') as { version?: unknown };
+    return typeof packageJson.version === 'string' ? packageJson.version : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function parseDocumentWithLiteParse(
   input: ParseDocumentWithLiteParseInput
@@ -250,8 +268,8 @@ export function normalizeLiteParseResult(
     normalizeLiteParsePage(page, index, options.extractionMode ?? 'native')
   );
   const elements = pages.flatMap((page, pageIndex) =>
-    textItemsForPage(asArray(record.pages)[pageIndex], page.text).map((item, itemIndex) =>
-      normalizeTextItemElement(item, page.pageNumber, itemIndex)
+    lineItemsForPage(asArray(record.pages)[pageIndex], page.pageNumber, page.text).map(
+      (item, itemIndex) => normalizeLineItemElement(item, page.pageNumber, itemIndex)
     )
   );
 
@@ -407,9 +425,11 @@ async function defaultLiteParseExecutor(input: LiteParseExecutorInput): Promise<
   return runLiteParseCli(input.filePath, input.options);
 }
 
-async function loadLiteParseModule(): Promise<{ LiteParse?: new (options: LiteParseOptions) => {
-  parse(input: string): Promise<unknown>;
-} } | null> {
+async function loadLiteParseModule(): Promise<{
+  LiteParse?: new (options: LiteParseOptions) => {
+    parse(input: string): Promise<unknown>;
+  };
+} | null> {
   try {
     return (await import('@llamaindex/liteparse')) as {
       LiteParse?: new (options: LiteParseOptions) => { parse(input: string): Promise<unknown> };
@@ -428,10 +448,14 @@ async function loadLiteParseModule(): Promise<{ LiteParse?: new (options: LitePa
 
 function runLiteParseCli(filePath: string, options: LiteParseOptions): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const command = process.platform === 'win32' ? 'lit.cmd' : 'lit';
-    const child = spawn(command, ['parse', filePath, ...liteParseCliArgs(options)], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const invocation = resolveLiteParseCliInvocation();
+    const child = spawn(
+      invocation.command,
+      [...invocation.args, 'parse', filePath, ...liteParseCliArgs(options)],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
     let stdout = '';
     let stderr = '';
 
@@ -457,6 +481,33 @@ function runLiteParseCli(filePath: string, options: LiteParseOptions): Promise<u
       }
     });
   });
+}
+
+function resolveLiteParseCliInvocation(): { command: string; args: string[] } {
+  try {
+    const require = createRequire(import.meta.url);
+    const packageJsonPath = require.resolve('@llamaindex/liteparse/package.json');
+    const packageJson = require(packageJsonPath) as {
+      bin?: string | Record<string, string>;
+    };
+    const binTarget =
+      typeof packageJson.bin === 'string'
+        ? packageJson.bin
+        : (packageJson.bin?.lit ?? packageJson.bin?.liteparse);
+
+    if (binTarget) {
+      const fs = require('node:fs') as typeof import('node:fs');
+      const path = require('node:path') as typeof import('node:path');
+      const cliPath = path.resolve(path.dirname(packageJsonPath), binTarget);
+      if (fs.existsSync(cliPath)) {
+        return { command: process.execPath, args: [cliPath] };
+      }
+    }
+  } catch {
+    // Fall through to PATH lookup below.
+  }
+
+  return { command: process.platform === 'win32' ? 'lit.cmd' : 'lit', args: [] };
 }
 
 function liteParseCliArgs(options: LiteParseOptions): string[] {
@@ -508,7 +559,7 @@ function normalizeLiteParsePage(
   const record = asRecord(value);
   const pageNumber = asNumber(record.pageNum, asNumber(record.page, index + 1));
   const text = asString(record.text, '');
-  const boundingBoxes = textItemsForPage(value, text)
+  const boundingBoxes = rawTextItemsForPage(value, pageNumber)
     .map((item) => normalizeBbox(item))
     .filter((box): box is NonNullable<ReturnType<typeof normalizeBbox>> => box !== null);
 
@@ -520,16 +571,82 @@ function normalizeLiteParsePage(
   };
 }
 
-function textItemsForPage(page: unknown, fallbackText: string): LiteParseTextItem[] {
-  const items = asArray(asRecord(page).textItems)
+function rawTextItemsForPage(page: unknown, pageNumber: number): LiteParseTextItem[] {
+  return asArray(asRecord(page).textItems)
     .map(asTextItem)
-    .filter((item): item is LiteParseTextItem => item !== null);
+    .filter((item): item is LiteParseTextItem => item !== null)
+    .map((item, index) => ({
+      ...item,
+      sourceId: `page-${pageNumber}-item-${index + 1}`,
+    }));
+}
 
-  if (items.length > 0 || fallbackText.trim().length === 0) {
-    return items;
+function lineItemsForPage(
+  page: unknown,
+  pageNumber: number,
+  fallbackText: string
+): LiteParseLineItem[] {
+  const items = rawTextItemsForPage(page, pageNumber);
+
+  if (items.length > 0 && items.every((item) => item.y !== undefined)) {
+    return groupTextItemsIntoLines(items);
   }
 
-  return [{ text: fallbackText }];
+  const fallbackLines = fallbackText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (fallbackLines.length > 0) {
+    return fallbackLines.map((text, index) => ({
+      text,
+      sourceIds: [`page-${pageNumber}-text-line-${index + 1}`],
+      bbox: null,
+      confidence: 1,
+    }));
+  }
+
+  return items.map((item) => ({
+    text: item.text,
+    sourceIds: [item.sourceId ?? `page-${pageNumber}-item-unknown`],
+    bbox: normalizeBbox(item),
+    confidence: item.confidence ?? 1,
+  }));
+}
+
+function groupTextItemsIntoLines(items: LiteParseTextItem[]): LiteParseLineItem[] {
+  const sortedItems = [...items].sort(compareTextItemsByPosition);
+  const groups: LiteParseTextItem[][] = [];
+
+  for (const item of sortedItems) {
+    const currentGroup = groups[groups.length - 1];
+    if (currentGroup && isSameTextLine(currentGroup, item)) {
+      currentGroup.push(item);
+      continue;
+    }
+
+    groups.push([item]);
+  }
+
+  return groups.map((group) => {
+    const lineItems = [...group].sort((left, right) => (left.x ?? 0) - (right.x ?? 0));
+    const confidences = lineItems
+      .map((item) => item.confidence)
+      .filter((confidence): confidence is number => confidence !== undefined);
+
+    return {
+      text: lineItems
+        .map((item) => item.text.trim())
+        .filter(Boolean)
+        .join(' '),
+      sourceIds: lineItems.map((item) => item.sourceId).filter((id): id is string => Boolean(id)),
+      bbox: mergeLineBbox(lineItems),
+      confidence:
+        confidences.length > 0
+          ? confidences.reduce((sum, confidence) => sum + confidence, 0) / confidences.length
+          : 1,
+    };
+  });
 }
 
 function asTextItem(value: unknown): LiteParseTextItem | null {
@@ -549,12 +666,12 @@ function asTextItem(value: unknown): LiteParseTextItem | null {
   };
 }
 
-function normalizeTextItemElement(
-  item: LiteParseTextItem,
+function normalizeLineItemElement(
+  item: LiteParseLineItem,
   pageNumber: number,
   itemIndex: number
 ): NormalizedParserElement {
-  const sourceId = `page-${pageNumber}-item-${itemIndex + 1}`;
+  const sourceId = `page-${pageNumber}-line-${itemIndex + 1}`;
   const kind = classifyElementKind(item.text);
 
   return {
@@ -564,8 +681,8 @@ function normalizeTextItemElement(
     pageNumber,
     level: kind === 'heading' ? headingLevel(item.text) : null,
     confidence: item.confidence ?? 1,
-    bbox: normalizeBbox(item),
-    sourceIds: [sourceId],
+    bbox: item.bbox,
+    sourceIds: item.sourceIds.length > 0 ? item.sourceIds : [sourceId],
   };
 }
 
@@ -580,6 +697,60 @@ function normalizeBbox(item: LiteParseTextItem): NormalizedParserElement['bbox']
   }
 
   return { x: item.x, y: item.y, width: item.width, height: item.height };
+}
+
+function compareTextItemsByPosition(left: LiteParseTextItem, right: LiteParseTextItem): number {
+  const yDiff = (left.y ?? 0) - (right.y ?? 0);
+  if (Math.abs(yDiff) > textLineTolerance([left, right])) {
+    return yDiff;
+  }
+
+  return (left.x ?? 0) - (right.x ?? 0);
+}
+
+function isSameTextLine(group: LiteParseTextItem[], item: LiteParseTextItem): boolean {
+  const baseline = averageY(group);
+  return Math.abs((item.y ?? baseline) - baseline) <= textLineTolerance([...group, item]);
+}
+
+function averageY(items: LiteParseTextItem[]): number {
+  return items.reduce((sum, item) => sum + (item.y ?? 0), 0) / Math.max(1, items.length);
+}
+
+function textLineTolerance(items: LiteParseTextItem[]): number {
+  const heights = items
+    .map((item) => item.height)
+    .filter((height): height is number => height !== undefined && height > 0);
+  const averageHeight =
+    heights.length > 0 ? heights.reduce((sum, height) => sum + height, 0) / heights.length : 0;
+
+  return Math.max(2, averageHeight * 0.5);
+}
+
+function mergeLineBbox(items: LiteParseTextItem[]): NormalizedParserElement['bbox'] {
+  const boxes = items
+    .map(normalizeBbox)
+    .filter((box): box is NonNullable<ReturnType<typeof normalizeBbox>> => box !== null);
+
+  if (boxes.length === 0) {
+    return null;
+  }
+
+  const left = Math.min(...boxes.map((box) => box.x));
+  const top = Math.min(...boxes.map((box) => box.y));
+  const right = Math.max(...boxes.map((box) => box.x + box.width));
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+
+  return {
+    x: roundBboxCoordinate(left),
+    y: roundBboxCoordinate(top),
+    width: roundBboxCoordinate(right - left),
+    height: roundBboxCoordinate(bottom - top),
+  };
+}
+
+function roundBboxCoordinate(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
 }
 
 function classifyElementKind(text: string): NormalizedParserElement['kind'] {
@@ -740,12 +911,10 @@ function mergePageText(nativeText: string, ocrText: string): string {
   }
 
   const nativeLineKeys = new Set(nativeText.split(/\r?\n/).map(normalizeTextForDedupe));
-  const appendedOcrLines = ocrText
-    .split(/\r?\n/)
-    .filter((line) => {
-      const lineKey = normalizeTextForDedupe(line);
-      return lineKey.length > 0 && !nativeLineKeys.has(lineKey);
-    });
+  const appendedOcrLines = ocrText.split(/\r?\n/).filter((line) => {
+    const lineKey = normalizeTextForDedupe(line);
+    return lineKey.length > 0 && !nativeLineKeys.has(lineKey);
+  });
 
   if (appendedOcrLines.length === 0) {
     return nativeText;

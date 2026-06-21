@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('LiteParse packaging smoke check', () => {
-  it('can resolve the Node package and bundled lit CLI entry', () => {
+  it('can resolve the Node package, construct LiteParse, and find bundled native assets', async () => {
     const require = createRequire(__filename);
     const packageJsonPath = require.resolve('@llamaindex/liteparse/package.json');
     const packageRoot = path.dirname(packageJsonPath);
@@ -21,5 +21,23 @@ describe('LiteParse packaging smoke check', () => {
 
     const cliBinPath = path.resolve(packageRoot, cliBinTarget as string);
     expect(fs.existsSync(cliBinPath)).toBe(true);
+
+    const liteparseModule = await import('@llamaindex/liteparse');
+    const LiteParse = liteparseModule.LiteParse ?? liteparseModule.default;
+    const parser = new LiteParse({ outputFormat: 'json', quiet: true, ocrEnabled: false });
+    expect(parser.getConfig()).toMatchObject({
+      outputFormat: 'json',
+      quiet: true,
+      ocrEnabled: false,
+    });
+
+    if (process.platform === 'win32' && process.arch === 'x64') {
+      const nativePackageJsonPath =
+        require.resolve('@llamaindex/liteparse-win32-x64-msvc/package.json');
+      const nativePackageRoot = path.dirname(nativePackageJsonPath);
+      expect(fs.existsSync(path.join(nativePackageRoot, 'liteparse.win32-x64-msvc.node'))).toBe(
+        true
+      );
+    }
   });
 });

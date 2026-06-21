@@ -60,7 +60,7 @@ describe('building-code LiteParse adapter', () => {
       ],
       elements: [
         {
-          elementId: 'liteparse-page-1-item-1',
+          elementId: 'liteparse-page-1-line-1',
           kind: 'heading',
           text: 'Section 9.10.3.1 Fire separations',
           pageNumber: 1,
@@ -70,7 +70,7 @@ describe('building-code LiteParse adapter', () => {
           sourceIds: ['page-1-item-1'],
         },
         {
-          elementId: 'liteparse-page-1-item-2',
+          elementId: 'liteparse-page-1-line-2',
           kind: 'table',
           text: 'Table 9.10.3.1 Ratings',
           pageNumber: 1,
@@ -80,7 +80,7 @@ describe('building-code LiteParse adapter', () => {
           sourceIds: ['page-1-item-2'],
         },
         {
-          elementId: 'liteparse-page-1-item-3',
+          elementId: 'liteparse-page-1-line-3',
           kind: 'table',
           text: 'Wall | Rating',
           pageNumber: 1,
@@ -92,7 +92,7 @@ describe('building-code LiteParse adapter', () => {
       ],
       tables: [
         {
-          elementId: 'liteparse-page-1-item-2',
+          elementId: 'liteparse-page-1-line-2',
           caption: 'Table 9.10.3.1 Ratings',
           pageNumber: 1,
           columns: [],
@@ -102,7 +102,7 @@ describe('building-code LiteParse adapter', () => {
           sourceIds: ['page-1-item-2'],
         },
         {
-          elementId: 'liteparse-page-1-item-3',
+          elementId: 'liteparse-page-1-line-3',
           caption: 'Wall | Rating',
           pageNumber: 1,
           columns: ['Wall', 'Rating'],
@@ -117,8 +117,54 @@ describe('building-code LiteParse adapter', () => {
     });
   });
 
+  it('groups split LiteParse text runs into canonical heading and table lines', () => {
+    const document = normalizeLiteParseResult({
+      parserVersion: '2.1.2',
+      pages: [
+        litePage(1, 'Section 9.10.3.1 Fire separations\nTable 9.10.3.1 Ratings', [
+          textItem('Section', 10, 20, 42, 12),
+          textItem('9.10.3.1', 58, 20.4, 62, 12),
+          textItem('Fire', 126, 19.8, 26, 12),
+          textItem('separations', 158, 20.2, 78, 12),
+          textItem('Table', 10, 52, 34, 12),
+          textItem('9.10.3.1', 50, 52.3, 62, 12),
+          textItem('Ratings', 118, 51.9, 48, 12),
+        ]),
+      ],
+    });
+
+    expect(document.elements.map((element) => element.text)).toEqual([
+      'Section 9.10.3.1 Fire separations',
+      'Table 9.10.3.1 Ratings',
+    ]);
+    expect(document.elements[0]).toMatchObject({
+      elementId: 'liteparse-page-1-line-1',
+      kind: 'heading',
+      level: 2,
+      bbox: { x: 10, y: 19.8, width: 226, height: 12.6 },
+      sourceIds: ['page-1-item-1', 'page-1-item-2', 'page-1-item-3', 'page-1-item-4'],
+    });
+    expect(document.tables).toEqual([
+      expect.objectContaining({
+        elementId: 'liteparse-page-1-line-2',
+        caption: 'Table 9.10.3.1 Ratings',
+        pageNumber: 1,
+        sourceIds: ['page-1-item-5', 'page-1-item-6', 'page-1-item-7'],
+      }),
+    ]);
+  });
+
   it('compresses target page numbers for LiteParse OCR calls', () => {
     expect(targetPagesFromPageNumbers([5, 1, 2, 4, 9])).toBe('1-2,4-5,9');
+  });
+
+  it('uses the installed LiteParse package version when parser output omits version', () => {
+    const document = normalizeLiteParseResult({
+      pages: [litePage(1, 'Section 1 Scope', [textItem('Section 1 Scope', 10, 20, 120, 12)])],
+    });
+
+    expect(document.parserVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(document.parserVersion).not.toBe('unknown');
   });
 
   it('preserves native page content and appends OCR content for selected suspicious pages', () => {
@@ -154,7 +200,7 @@ describe('building-code LiteParse adapter', () => {
     ]);
     expect(merged.elements.map((element) => element.pageNumber)).toEqual([1, 2, 2]);
     expect(merged.elements[1]).toMatchObject({
-      elementId: 'liteparse-page-2-item-1',
+      elementId: 'liteparse-page-2-line-1',
       text: 'Scan',
       pageNumber: 2,
     });
